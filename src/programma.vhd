@@ -22,7 +22,7 @@ end entity project_reti_logiche;
 architecture behavioral of project_reti_logiche is
 
     -- Definizione degli stati della FSM
-    type state_type is (START, IDLE, 
+    type state_type is (START, WAITING_FOR_NEXT_EXECUTION,
         K1_STATE, K2_STATE, K_STATE, S_STATE, READ_COEFF, 
         FILTER_INIT, FILTER_INIT_2, FILTER_INIT_3, FILTER_INIT_4, 
         COMPUTE_ORDER_3, SHIFT_ORDER_3, READ_NEXT_2,
@@ -110,22 +110,33 @@ begin
 
         elsif rising_edge(i_clk) then
         
+            -- se sono nello stato DONE (quindi ho finito un'esecuzione)
             if state = DONE then
-                if i_start = '0' then
-                    o_done <= '0';
-                    o_mem_en <= '0';
-                    o_mem_we <= '0';
-                    state <= IDLE;           
-                 end if;
+                if i_start = '0' then -- e il tb mi notifica che ha finito di leggere la ram
+                    o_done <= '0';    -- allora abbasso il done 
+                    o_mem_en <= '0';  
+                    o_mem_we <= '0'; 
+                    state <= WAITING_FOR_NEXT_EXECUTION;
+                end if;
             end if;
         
             if i_start = '1' then
                 case state is
 
-
-                    ---------------------------- FASE DI LETTURA METADATI -----------------------------------
+                    when WAITING_FOR_NEXT_EXECUTION =>
+                        data_counter <= 0; -- reset dei counter importantissimo per la prossima esecuzione
+                        coeff_counter <= 0;
+                        k1 <= (others => '0');
+                        k2 <= (others => '0');
+                        s <= '0';
+                        current_state <= START;
+                        state <= WAITING;
+                    
                     when WAITING =>
                         state <= current_state; 
+
+
+                    ---------------------------- FASE DI LETTURA METADATI -----------------------------------
 
 
                     when START => -- stato di attesa segnale start, lettura indirizzo mem iniz
@@ -332,7 +343,7 @@ begin
 
                         o_done <= '0';
 
-               ----set resize value to 16 instead of 32 bc [Synth 8-690] width mismatch in assignment; target has 32 bits, source has 64 bits 
+                        ----set resize value to 16 instead of 32 bc [Synth 8-690] width mismatch in assignment; target has 32 bits, source has 64 bits 
          
                         tmp_n2 := resize(c_n2_3, 16) * resize(prev2, 16); -- se non si può o per plagio defence, we can use std logic vector 31 down to 8 = 0 e others = x
                         tmp_n1 := resize(c_n1_3, 16) * resize(prev1, 16);
@@ -490,11 +501,11 @@ begin
 
                     when DONE =>
                         -- Stato finale, attesa del reset
-                        
-                        
                         o_mem_en <= '0';
                         o_mem_we <= '0';
-                        o_done <= '1';   
+                        o_done <= '1'; 
+                        -- poi devo aspettare fin quando i_start = 0 (vedi if all'inizio)
+                        
                        
                         
 
