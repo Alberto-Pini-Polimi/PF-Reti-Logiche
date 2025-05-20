@@ -116,21 +116,18 @@ begin
                     o_done <= '0';    -- allora abbasso il done 
                     o_mem_en <= '0';  
                     o_mem_we <= '0'; 
-                    state <= WAITING_FOR_NEXT_EXECUTION;
+                    data_counter <= 0; -- reset dei counter importantissimo per la prossima esecuzione
+                    coeff_counter <= 0;
+                    k1 <= (others => '0');
+                    k2 <= (others => '0');
+                    s <= '0';
+                    current_state <= START;
+                    state <= WAITING;
                 end if;
             end if;
         
             if i_start = '1' then
                 case state is
-
-                    when WAITING_FOR_NEXT_EXECUTION =>
-                        data_counter <= 0; -- reset dei counter importantissimo per la prossima esecuzione
-                        coeff_counter <= 0;
-                        k1 <= (others => '0');
-                        k2 <= (others => '0');
-                        s <= '0';
-                        current_state <= START;
-                        state <= WAITING;
                     
                     when WAITING =>
                         state <= current_state; 
