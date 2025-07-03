@@ -24,18 +24,132 @@ end architecture Behavioral;
 
 
 
--- Modulo di Memory Unit (MU)
+-- Modulo di Memory Controller Unit (MCU)
 -- ----------------------------------------------------
-entity MU is
-    port (
-        rst : in STD_LOGIC;
-        clk : in STD_LOGIC;
-        ??
-    );
-end entity MU;
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
-architecture Behavioral of MU is
+entity MCU is
+    port (
+        i_rst             : in  std_logic;  -- Reset asincrono
+        i_clk             : in  std_logic;  -- Clock di sistema
+        i_start_mcu       : in  std_logic;  -- Segnale di avvio operazione di memoria
+
+        i_write_flag      : in  std_logic;                  -- Se '1' esegue scrittura, altrimenti lettura
+        i_target_mem_addr : in  std_logic_vector(15 downto 0); -- Indirizzo di memoria (target)
+        i_data_to_write   : in  std_logic_vector(7 downto 0);  -- Dato da scrivere (valido solo se i_write_flag = '1')
+        o_data_read       : out std_logic_vector(7 downto 0);  -- Dato letto dalla memoria (valido se i_write_flag = '0' e o_done = '1')
+        
+        o_done            : out std_logic;                  -- Segnale di completamento operazione
+
+        -- Porte di interfaccia con la RAM esterna
+        -- le collego poi nel top_module con quelle del test bench
+        o_mem_addr        : out std_logic_vector(15 downto 0); -- Indirizzo verso la RAM
+        i_mem_data_bus    : in  std_logic_vector(7 downto 0);  -- Dato letto dalla RAM
+        o_mem_data_bus    : out std_logic_vector(7 downto 0);  -- Dato da scrivere verso la RAM
+        o_mem_we          : out std_logic;                  -- Write Enable (1 per scrittura, 0 per lettura)
+        o_mem_en          : out std_logic                   -- Memory Enable (1 per abilitare RAM, 0 per disabilitare)
+    );
+end entity MCU;
+
+architecture Behavioral of MCU is
+
+    -- Stati della FSM interna al Memory Controller
+    type state_type is (IDLE, MEM_ACCESS, DONE_MEM_OP);
+    signal current_state : state_type := IDLE;
+
+    -- Segnali interni di registro per le uscite del modulo e per catturare il dato letto
+    signal s_done        : std_logic := '0';
+    signal s_data_read   : std_logic_vector(7 downto 0) := (others => '0');
+    
+    -- Segnali interni per pilotare le porte del bus di memoria (e registrarle)
+    signal s_mem_addr_reg     : std_logic_vector(15 downto 0) := (others => '0');
+    signal s_mem_data_bus_reg : std_logic_vector(7 downto 0)  := (others => '0');
+    signal s_mem_we_reg       : std_logic := '0';
+    signal s_mem_en_reg       : std_logic := '0';
+
 begin
+
+    process (i_clk, i_rst)
+    begin
+
+        if i_rst = '1' then
+            -- Reset asincrono
+            current_state      <= IDLE;
+            s_done             <= '0';
+            s_data_read        <= (others => '0');
+            s_mem_addr_reg     <= (others => '0');
+            s_mem_data_bus_reg <= (others => '0');
+            s_mem_we_reg       <= '0';
+            s_mem_en_reg       <= '0';
+
+        elsif rising_edge(i_clk) then
+            -- Default assignments per il prossimo ciclo, a meno che non vengano sovrascritti
+            s_done       <= '0'; -- Resetta 'done' all'inizio del ciclo
+            s_mem_we_reg <= '0'; -- Di default non scrivere
+            s_mem_en_reg <= '0'; -- Di default disabilita la memoria
+
+            case current_state is
+                when IDLE =>
+                    if i_start_mcu = '1' then
+                        -- Una nuova operazione di memoria è richiesta
+                        s_mem_addr_reg <= i_target_mem_addr; -- Prepara l'indirizzo
+
+                        -- Capisco se devo leggere o scrivere
+                        if i_write_flag = '1' then
+                            -- Operazione di scrittura
+                            s_mem_data_bus_reg <= i_data_to_write; -- Prepara il dato da scrivere
+                            s_mem_we_reg       <= '1';              -- Abilita la scrittura
+                        else
+                            -- Operazione di lettura
+                            s_mem_data_bus_reg <= (others => 'Z'); -- bus dati in alta impedenza per la lettura (solo per simulazione, la sintesi lo ignora)
+                            s_mem_we_reg       <= '0';              -- Disabilita la scrittura
+                        end if;
+                        
+                        s_mem_en_reg  <= '1';              -- Abilita il chip di memoria
+                        current_state <= MEM_ACCESS;       -- Passa allo stato di accesso alla memoria
+                    else
+                        current_state <= IDLE; -- Rimani in IDLE
+                    end if;
+
+                when MEM_ACCESS =>
+
+                    s_mem_en_reg <= '0'; -- Disabilita la memoria dopo il ciclo di accesso
+                    s_mem_we_reg <= '0'; -- Disabilita il write enable
+
+                    if i_write_flag = '0' then
+                        -- Se era una lettura, cattura il dato dal bus
+                        s_data_read <= i_mem_data_bus; 
+                    end if;
+                    -- Se invece ero in scrittura assumo sia andato tutto bene dato che non posso
+                    -- essere certo che il dato sia stato scritto
+
+                    s_done        <= '1';        -- Segnala che l'operazione è completa
+                    current_state <= DONE_MEM_OP; -- Passa allo stato di completamento
+
+                when DONE_MEM_OP =>
+                    -- Qui attendiamo che la Control Unit esterna riconosca il segnale 'done'
+                    -- disattivando 'i_start_mcu'.
+                    if i_start_mcu = '0' then
+                        current_state <= IDLE; -- Torna allo stato IDLE per la prossima operazione
+                    else
+                        current_state <= DONE_MEM_OP; -- Aspetta che la richiesta di start venga de-asserita
+                    end if;
+
+                when others =>
+                    current_state <= IDLE; -- Stato di fallback, torna in IDLE
+            end case;
+        end if;
+    end process;
+    
+    -- mappano i segnali di registro interni alle porte di output
+    o_done         <= s_done;
+    o_data_read    <= s_data_read;
+    o_mem_addr     <= s_mem_addr_reg;
+    o_mem_data_bus <= s_mem_data_bus_reg;
+    o_mem_we       <= s_mem_we_reg;
+    o_mem_en       <= s_mem_en_reg;
     
 end architecture Behavioral;
 
