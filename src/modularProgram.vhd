@@ -329,6 +329,240 @@ end architecture Behavioral;
 
 
 
+-- Modulo di Config Reader Unit (CRU) per la lettura di s, k e dei coefficienti
+-- ----------------------------------------------------
+entity CRU is
+    port (
+        i_clk : in std_logic;
+        i_rst : in std_logic;
+        i_start : in std_logic;
+        i_base_addr : in std_logic_vector(15 downto 0);
+        
+        -- Output dei parametri letti
+        o_k : out std_logic_vector(15 downto 0);
+        o_s : out std_logic;
+        o_cn3 : out signed(7 downto 0);
+        o_cn2 : out signed(7 downto 0);
+        o_cn1 : out signed(7 downto 0);
+        o_cp1 : out signed(7 downto 0);
+        o_cp2 : out signed(7 downto 0);
+        o_cp3 : out signed(7 downto 0);
+        o_w1_addr : out std_logic_vector(15 downto 0);
+        o_done : out std_logic;
+        
+        -- Interfaccia con MCU
+        o_start_mcu : out std_logic;
+        i_done_mcu : in std_logic;
+        o_mcu_addr : out std_logic_vector(15 downto 0);
+        o_mcu_write_flag : out std_logic;
+        i_mcu_data : in std_logic_vector(7 downto 0);
+        o_mcu_data : out std_logic_vector(7 downto 0)
+    );
+end entity CRU;
+architecture Behavioral of CRU is
+
+    type state_type is (
+        IDLE, 
+        READ_K1, WAIT_K1,
+        READ_K2, WAIT_K2,
+        READ_S, WAIT_S,
+        READ_COEFFS, WAIT_COEFFS,
+        CONFIG_DONE
+    );
+    signal current_state : state_type := IDLE;
+
+    -- Registri interni
+    signal s_k1 : std_logic_vector(7 downto 0) := (others => '0');
+    signal s_k2 : std_logic_vector(7 downto 0) := (others => '0');
+    signal s_s : std_logic := '0';
+    -- coefficienti di ordine 3 e 5
+    signal s_c_n3 : signed(7 downto 0)  := to_signed(0, 8);
+    signal s_c_n2 : signed(7 downto 0)  := to_signed(0, 8);
+    signal s_c_n1 : signed(7 downto 0)  := to_signed(0, 8);
+    signal s_c_p1 : signed(7 downto 0)  := to_signed(0, 8);
+    signal s_c_p2 : signed(7 downto 0)  := to_signed(0, 8);
+    signal s_c_p3 : signed(7 downto 0)  := to_signed(0, 8);
+    signal s_w1_addr : std_logic_vector(15 downto 0) := (others => '0');
+    signal s_base_addr : std_logic_vector(15 downto 0) := (others => '0');
+    -- Contatore per lettura coefficienti
+    -- si usa questo esgnale per iterare leggendo tutti i coefficienti a seconda dell'ordine
+    signal coeff_counter : integer range 0 to 6 := 0;
+    -- Segnali di controllo MCU
+    signal s_start_mcu : std_logic := '0';
+    signal s_mcu_addr : std_logic_vector(15 downto 0) := (others => '0');
+    signal s_done : std_logic := '0';
+
+begin
+
+    process (i_clk, i_rst)
+    begin
+        if i_rst = '1' then
+            -- Reset asincrono
+            current_state <= IDLE;
+            s_k1 <= (others => '0');
+            s_k2 <= (others => '0');
+            s_s <= '0';
+            s_c_n3 <= (others => '0');
+            s_c_n2 <= (others => '0');
+            s_c_n1 <= (others => '0');
+            s_c_p1 <= (others => '0');
+            s_c_p2 <= (others => '0');
+            s_c_p3 <= (others => '0');
+            s_w1_addr <= (others => '0');
+            s_base_addr <= (others => '0');
+            coeff_counter <= 0;
+            s_start_mcu <= '0';
+            s_mcu_addr <= (others => '0');
+            s_done <= '0';
+            
+        elsif rising_edge(i_clk) then
+            
+            case current_state is
+                
+                when IDLE =>
+                    s_done <= '0';
+                    s_start_mcu <= '0';
+                    
+                    if i_start = '1' then
+                        s_base_addr <= i_base_addr;
+                        s_w1_addr <= std_logic_vector(unsigned(i_base_addr) + 17);
+                        current_state <= READ_K1;
+                    end if;
+                
+                -- Lettura K1
+                when READ_K1 =>
+                    s_mcu_addr <= s_base_addr;  -- Indirizzo K1
+                    s_start_mcu <= '1';
+                    current_state <= WAIT_K1;
+                
+                when WAIT_K1 =>
+                    s_start_mcu <= '0';
+                    if i_done_mcu = '1' then -- bisognerà poi collegare tutti questi segnali!
+                        s_k1 <= i_mcu_data;
+                        current_state <= READ_K2;
+                    end if;
+                
+                -- Lettura K2
+                when READ_K2 =>
+                    s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 1);
+                    s_start_mcu <= '1';
+                    current_state <= WAIT_K2;
+                
+                when WAIT_K2 =>
+                    s_start_mcu <= '0';
+                    if i_done_mcu = '1' then
+                        s_k2 <= i_mcu_data;
+                        current_state <= READ_S;
+                    end if;
+                
+                -- Lettura S
+                when READ_S =>
+                    s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 2);
+                    s_start_mcu <= '1';
+                    current_state <= WAIT_S;
+                
+                when WAIT_S =>
+                    s_start_mcu <= '0';
+                    if i_done_mcu = '1' then
+                        s_s <= i_mcu_data(0);
+                        coeff_counter <= 0;
+                        current_state <= READ_COEFFS;
+                    end if;
+                
+                -- Lettura coefficienti
+                when READ_COEFFS =>
+                    -- Determina l'indirizzo del coefficiente da leggere
+                    if s_s = '0' then
+                        -- Filtro ordine 3: coefficienti agli indirizzi 4, 5, 7, 8
+                        case coeff_counter is
+                            when 0 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 4);   -- c_n2_3
+                            when 1 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 5);   -- c_n1_3
+                            when 2 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 7);   -- c_p1_3
+                            when 3 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 8);   -- c_p2_3
+                            when others => s_mcu_addr <= (others => '0');
+                        end case;
+                    else
+                        -- Filtro ordine 5: coefficienti agli indirizzi 10, 11, 12, 14, 15, 16
+                        case coeff_counter is
+                            when 0 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 10);  -- c_n3_5
+                            when 1 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 11);  -- c_n2_5
+                            when 2 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 12);  -- c_n1_5
+                            when 3 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 14);  -- c_p1_5
+                            when 4 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 15);  -- c_p2_5
+                            when 5 => s_mcu_addr <= std_logic_vector(unsigned(s_base_addr) + 16);  -- c_p3_5
+                            when others => s_mcu_addr <= (others => '0');
+                        end case;
+                    end if;
+                    
+                    s_start_mcu <= '1';
+                    current_state <= WAIT_COEFFS;
+                
+                when WAIT_COEFFS =>
+                    s_start_mcu <= '0';
+                    if i_done_mcu = '1' then
+                        -- Memorizza il coefficiente letto
+                        if s_s = '0' then
+                            -- Filtro ordine 3
+                            s_coeffs_3(coeff_counter) <= signed(i_mcu_data);
+                            
+                            -- al quarto coefficiente ho finito di leggerli tutti
+                            if coeff_counter = 3 then
+                                current_state <= CONFIG_DONE;
+                            else
+                                coeff_counter <= coeff_counter + 1;
+                                current_state <= READ_COEFFS;
+                            end if;
+                        else
+                            -- Filtro ordine 5
+                            s_coeffs_5(coeff_counter) <= signed(i_mcu_data);
+                            
+                            -- al sesto coefficiente ho finito la lettura
+                            if coeff_counter = 5 then
+                                current_state <= CONFIG_DONE;
+                            else
+                                coeff_counter <= coeff_counter + 1;
+                                current_state <= READ_COEFFS;
+                            end if;
+                        end if;
+                    end if;
+                
+                when CONFIG_DONE =>
+                    s_done <= '1';
+                    s_start_mcu <= '0';
+                    
+                    -- Aspetta che il segnale i_start venga de-asserito
+                    if i_start = '0' then
+                        current_state <= IDLE;
+                    end if;
+                
+                when others =>
+                    current_state <= IDLE;
+            
+            end case;
+        end if;
+    end process;
+
+    -- Assegnazione delle uscite
+    o_k(15 downto 8) <= s_k1;
+    o_k(7 downto 0) <= s_k2;
+    o_s <= s_s;
+    o_cn3 <= s_c_n3;
+    o_cn2 <= s_c_n2;
+    o_cn1 <= s_c_n1;
+    o_cp1 <= s_c_p1;
+    o_cp2 <= s_c_p2;
+    o_cp3 <= s_c_p3;
+    o_w1_addr <= s_w1_addr;
+    o_done <= s_done;
+    
+    -- Interfaccia MCU
+    o_start_mcu <= s_start_mcu;
+    o_mcu_addr <= s_mcu_addr;
+    o_mcu_write_flag <= '0';  -- Sempre in lettura
+    o_mcu_data <= (others => '0');  -- Non usato in lettura
+
+end architecture Behavioral;
+
 
 
 
@@ -385,12 +619,53 @@ architecture Behavioral of CU is
     signal start_alu3, done_alu3 : std_logic;
     signal start_alu5, done_alu5 : std_logic;
 
-    -- Registri per i dati (come nel modulo originale)
-    signal k1, k2, s : std_logic_vector(7 downto 0);
-    coefficienti, prev e next ...
+    -- Registri per i dati
+    signal mem_w1_addr    : std_logic_vector(15 downto 0) := (others => '0'); -- Indirizzo del primo byte della sequenza da filtrare
+    signal mem_init_addr  : std_logic_vector(15 downto 0) := (others => '0'); -- Indirizzo del primo byte dell'input
+    signal k1, k2         : std_logic_vector(7 downto 0) := (others => '0');  -- Lunghezza sequenza e ordine filtro
+    signal k              : unsigned(15 downto 0) := to_unsigned(0, 16);  -- Lunghezza sequenza e ordine filtro
+    signal s              : std_logic := '0';
+    signal data_counter   : integer := 0;  -- Contatore per lettura dati
+    signal coeff_counter  : integer := 0;  -- Contatore per lettura coefficienti
+
+    
+    -- coefficienti di ordine 3
+    signal c_n2_3 : signed(7 downto 0)  := to_signed(0, 8);
+    signal c_n1_3 : signed(7 downto 0)  := to_signed(0, 8);
+    signal c_p1_3 : signed(7 downto 0)  := to_signed(0, 8);
+    signal c_p2_3 : signed(7 downto 0)  := to_signed(0, 8);
+    
+    -- coefficienti di ordine 5
+    signal c_n3_5 : signed(7 downto 0)  := to_signed(0, 8);
+    signal c_n2_5 : signed(7 downto 0)  := to_signed(0, 8);
+    signal c_n1_5 : signed(7 downto 0)  := to_signed(0, 8);
+    signal c_p1_5 : signed(7 downto 0)  := to_signed(0, 8);
+    signal c_p2_5 : signed(7 downto 0)  := to_signed(0, 8);
+    signal c_p3_5 : signed(7 downto 0)  := to_signed(0, 8);
+     
+    -- valori temporanei da dare in pasto alle ALU
+    signal prev3 : signed(7 downto 0)      := to_signed(0, 8);
+    signal prev2 : signed(7 downto 0)      := to_signed(0, 8);
+    signal prev1 : signed(7 downto 0)      := to_signed(0, 8);
+    signal current_W : signed(7 downto 0)  := to_signed(0, 8);
+    signal next1 : signed(7 downto 0)      := to_signed(0, 8);
+    signal next2 : signed(7 downto 0)      := to_signed(0, 8);
+    signal next3 : signed(7 downto 0)      := to_signed(0, 8);
+
 
 begin
-    macchina a stati
+    
+    process (clk, rst)
+
+        ...
+
+    begin
+        
+        ...
+
+    end process;
+
+
 end architecture Behavioral;
 
 

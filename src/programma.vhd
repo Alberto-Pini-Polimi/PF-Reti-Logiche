@@ -73,20 +73,20 @@ begin
 
     process (i_clk, i_rst) is
 
-    variable tmp_k : std_logic_vector(15 downto 0) := (others => '0');
-    variable tmp_s : std_logic := '0';
-    --variable tmp_coeff_counter : integer := 0;
-    
-    --MODIFIED TO SIGNED 
-    variable tmp_p3 : signed(31 downto 0) := to_signed(0, 32);
-    variable tmp_p2 : signed(31 downto 0) := to_signed(0, 32);
-    variable tmp_p1 : signed(31 downto 0) := to_signed(0, 32);
-    variable tmp_n1 : signed(31 downto 0) := to_signed(0, 32);
-    variable tmp_n2 : signed(31 downto 0) := to_signed(0, 32);
-    variable tmp_n3 : signed(31 downto 0) := to_signed(0, 32);
+        variable tmp_k : std_logic_vector(15 downto 0) := (others => '0');
+        variable tmp_s : std_logic := '0';
+        --variable tmp_coeff_counter : integer := 0;
+        
+        --MODIFIED TO SIGNED 
+        variable tmp_p3 : signed(31 downto 0) := to_signed(0, 32);
+        variable tmp_p2 : signed(31 downto 0) := to_signed(0, 32);
+        variable tmp_p1 : signed(31 downto 0) := to_signed(0, 32);
+        variable tmp_n1 : signed(31 downto 0) := to_signed(0, 32);
+        variable tmp_n2 : signed(31 downto 0) := to_signed(0, 32);
+        variable tmp_n3 : signed(31 downto 0) := to_signed(0, 32);
 
-    variable tmp_sum : signed(31 downto 0) := to_signed(0, 32);
-    variable tmp_res : signed(31 downto 0) := to_signed(0, 32);
+        variable tmp_sum : signed(31 downto 0) := to_signed(0, 32);
+        variable tmp_res : signed(31 downto 0) := to_signed(0, 32);
     
     begin
     
