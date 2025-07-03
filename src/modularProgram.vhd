@@ -3,33 +3,9 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 
--- Modulo di Reset
--- ----------------------------------------------------
-entity Reset is
-    port (
-        rst : in STD_LOGIC;
-        clk : in STD_LOGIC;
-        ??
-    );
-end entity Reset;
-
-architecture Behavioral of Reset is
-begin
-    ???
-end architecture Behavioral;
-
-
-
-
-
-
 
 -- Modulo di Memory Controller Unit (MCU)
 -- ----------------------------------------------------
-library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
-
 entity MCU is
     port (
         i_rst             : in  std_logic;  -- Reset asincrono
@@ -154,13 +130,6 @@ begin
 end architecture Behavioral;
 
 
-
-
-
-
-
-
-
 -- Modulo di Arithmetic Logic Unit for order 3 (ALU3)
 -- ----------------------------------------------------
 entity ALU3 is
@@ -258,11 +227,11 @@ end architecture Behavioral;
 
 -- Modulo di Arithmetic Logic Unit for order 5 (ALU5)
 -- ----------------------------------------------------
-entity ALU3 is
+entity ALU5 is
     port (
         i_clk : in STD_LOGIC;
         i_rst : in STD_LOGIC;
-        i_start_alu3 : in STD_LOGIC;
+        i_start_alu5 : in STD_LOGIC;
 
         i_cn3_5 : in signed(7 downto 0);
         i_cn2_5 : in signed(7 downto 0);
@@ -278,17 +247,17 @@ entity ALU3 is
         i_next2 : in signed(7 downto 0);
         i_next3 : in signed(7 downto 0);
 
-        o_done_alu3 : out STD_LOGIC;
-        o_result_alu3 : out signed(7 downto 0);
+        o_done_alu5 : out STD_LOGIC;
+        o_result_alu5 : out signed(7 downto 0);
     );
-end entity ALU3;
+end entity ALU5;
 
-architecture Behavioral of ALU3 is
+architecture Behavioral of ALU5 is
 
     -- creo dei segnali di registro che vengono mappati solo a fine processo
     -- agli effettivi segnali di output
-    signal s_result_alu3_reg : signed(7 downto 0);
-    signal s_done_alu3_reg   : STD_LOGIC;
+    signal s_result_alu5_reg : signed(7 downto 0);
+    signal s_done_alu5_reg   : STD_LOGIC;
 
 begin
 
@@ -308,15 +277,15 @@ begin
 
         -- tocca fare il reset
         if i_rst = '1' then
-            s_result_alu3_reg <= (others => '0');
-            s_done_alu3_reg   <= '0';
+            s_result_alu5_reg <= (others => '0');
+            s_done_alu5_reg   <= '0';
             
         -- altrimenti
         elsif rising_edge(i_clk) then
             -- Reset del segnale done ad ogni ciclo, a meno che non sia attivato di nuovo
-            s_done_alu3_reg <= '0';
+            s_done_alu5_reg <= '0';
 
-            if i_start_alu3 = '1' then
+            if i_start_alu5 = '1' then
                 -- Esegui i calcoli solo quando il segnale di start è attivo
         
                 -- moltiplicazioni
@@ -337,22 +306,22 @@ begin
 
                 -- saturo
                 if tmp_res > to_signed(127, 32) then
-                    s_result_alu3_reg <= "01111111";
+                    s_result_alu5_reg <= "01111111";
                 elsif tmp_res < to_signed(-128, 32) then
-                    s_result_alu3_reg <= "10000000";
+                    s_result_alu5_reg <= "10000000";
                 else
-                    s_result_alu3_reg <= std_logic_vector(resize(tmp_res, 8));
+                    s_result_alu5_reg <= std_logic_vector(resize(tmp_res, 8));
                 end if;
 
                 -- lancio il segnale di fine
-                s_done_alu3_reg <= '1';
+                s_done_alu5_reg <= '1';
             end if;
         end if;
     end process;
 
     -- assegnazione degli output dai registri
-    o_result_alu3 <= s_result_alu3_reg;
-    o_done_alu3   <= s_done_alu3_reg;
+    o_result_alu5 <= s_result_alu5_reg;
+    o_done_alu5   <= s_done_alu5_reg;
     
 end architecture Behavioral;
 
@@ -403,13 +372,53 @@ entity CU is
     port (
         rst : in STD_LOGIC;
         clk : in STD_LOGIC;
+
+        ...
         
     );
 end entity CU;
 
 architecture Behavioral of CU is
+
+    -- Segnali di controllo per i moduli
+    signal start_mcu, done_mcu : std_logic;
+    signal start_alu3, done_alu3 : std_logic;
+    signal start_alu5, done_alu5 : std_logic;
+
+    -- Registri per i dati (come nel modulo originale)
+    signal k1, k2, s : std_logic_vector(7 downto 0);
+    coefficienti, prev e next ...
+
 begin
     macchina a stati
 end architecture Behavioral;
 
 
+
+-- Top Module con stessa interfaccia del modulo iniziale
+-- ----------------------------------------------------
+
+entity top_module is
+    port (
+        i_clk      : in  std_logic;  -- Clock di sistema
+        i_rst      : in  std_logic;  -- Reset asincrono
+        i_start    : in  std_logic;  -- Segnale di avvio
+        i_add      : in  std_logic_vector(15 downto 0); -- Indirizzo di partenza in memoria
+
+        o_done     : out std_logic;  -- Segnale di completamento
+
+        o_mem_addr : out std_logic_vector(15 downto 0); -- Indirizzo di memoria
+        i_mem_data : in  std_logic_vector(7 downto 0);  -- Dato letto dalla memoria
+        o_mem_data : out std_logic_vector(7 downto 0);  -- Dato da scrivere in memoria
+        o_mem_we   : out std_logic;  -- Segnale di scrittura memoria
+        o_mem_en   : out std_logic   -- Segnale di abilitazione memoria
+    );
+end entity top_module;
+
+--devo istanziare gli altri moduli e connettere le porte tra di loro
+
+architecture Behavioral of top_module is
+
+begin
+    
+end architecture Behavioral;
