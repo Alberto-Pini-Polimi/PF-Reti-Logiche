@@ -133,9 +133,9 @@ end architecture Behavioral;
 -- ----------------------------------------------------
 entity ALU3 is
     port (
-        i_clk : in STD_LOGIC;
-        i_rst : in STD_LOGIC;
-        i_start_alu3 : in STD_LOGIC;
+        i_clk : in std_logic;
+        i_rst : in std_logic;
+        i_start_alu3 : in std_logic;
 
         i_cn2_3 : in signed(7 downto 0);
         i_cn1_3 : in signed(7 downto 0);
@@ -147,7 +147,7 @@ entity ALU3 is
         i_next1 : in signed(7 downto 0);
         i_next2 : in signed(7 downto 0);
 
-        o_done_alu3 : out STD_LOGIC;
+        o_done_alu3 : out std_logic;
         o_result_alu3 : out signed(7 downto 0);
     );
 end entity ALU3;
@@ -156,7 +156,7 @@ architecture Behavioral of ALU3 is
     -- creo dei segnali di registro che vengono mappati solo a fine processo
     -- agli effettivi segnali di output
     signal s_result_alu3_reg : signed(7 downto 0);
-    signal s_done_alu3_reg   : STD_LOGIC;
+    signal s_done_alu3_reg   : std_logic;
 
 begin
 
@@ -227,9 +227,9 @@ end architecture Behavioral;
 -- ----------------------------------------------------
 entity ALU5 is
     port (
-        i_clk : in STD_LOGIC;
-        i_rst : in STD_LOGIC;
-        i_start_alu5 : in STD_LOGIC;
+        i_clk : in std_logic;
+        i_rst : in std_logic;
+        i_start_alu5 : in std_logic;
 
         i_cn3_5 : in signed(7 downto 0);
         i_cn2_5 : in signed(7 downto 0);
@@ -245,7 +245,7 @@ entity ALU5 is
         i_next2 : in signed(7 downto 0);
         i_next3 : in signed(7 downto 0);
 
-        o_done_alu5 : out STD_LOGIC;
+        o_done_alu5 : out std_logic;
         o_result_alu5 : out signed(7 downto 0);
     );
 end entity ALU5;
@@ -254,7 +254,7 @@ architecture Behavioral of ALU5 is
     -- creo dei segnali di registro che vengono mappati solo a fine processo
     -- agli effettivi segnali di output
     signal s_result_alu5_reg : signed(7 downto 0);
-    signal s_done_alu5_reg   : STD_LOGIC;
+    signal s_done_alu5_reg   : std_logic;
 
 begin
 
@@ -1540,8 +1540,8 @@ begin
         i_cru_cn2_5       => s_cru_cn2_5,
         i_cru_cn1_5       => s_cru_cn1_5,
         i_cru_cp1_5       => s_cru_cp1_5,
-        i_cru_cp2_5       : in  signed(7 downto 0);
-        i_cru_cp3_5       : in  signed(7 downto 0);
+        i_cru_cp2_5       => s_cru_cp2_5,
+        i_cru_cp3_5       => s_cru_cp3_5,
         i_cru_w1_addr     => s_cru_w1_addr,
 
         -- Connessioni WRU
