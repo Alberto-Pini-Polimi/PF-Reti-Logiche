@@ -4,7 +4,7 @@ use ieee.numeric_std.all;
 
 
 
--- Modulo di Memory Controller Unit (MCU)
+-- Modulo di Memory Control Unit (MCU)
 -- ----------------------------------------------------
 entity MCU is
     port (
@@ -28,7 +28,6 @@ entity MCU is
         o_mem_en          : out std_logic                   -- Memory Enable (1 per abilitare RAM, 0 per disabilitare)
     );
 end entity MCU;
-
 architecture Behavioral of MCU is
 
     -- Stati della FSM interna al Memory Controller
@@ -152,7 +151,6 @@ entity ALU3 is
         o_result_alu3 : out signed(7 downto 0);
     );
 end entity ALU3;
-
 architecture Behavioral of ALU3 is
 
     -- creo dei segnali di registro che vengono mappati solo a fine processo
@@ -251,7 +249,6 @@ entity ALU5 is
         o_result_alu5 : out signed(7 downto 0);
     );
 end entity ALU5;
-
 architecture Behavioral of ALU5 is
 
     -- creo dei segnali di registro che vengono mappati solo a fine processo
@@ -567,133 +564,1032 @@ end architecture Behavioral;
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- Modulo di Control Unit (CU)
+-- Modulo di Window Reader Unit (WRU)
 -- ----------------------------------------------------
+entity Window_Reader_Unit is
+    port (
+        i_clk             : in  std_logic;
+        i_rst             : in  std_logic;
+        i_start_wru       : in  std_logic;                  -- Avvia la lettura della finestra
+        i_center_addr     : in  std_logic_vector(15 downto 0); -- L'indirizzo del valore centrale (W(i))
+        i_filter_order_s  : in  std_logic;                  -- '0' per ordine 3, '1' per ordine 5
+
+        -- Output dei dati della finestra
+        o_prev3           : out signed(7 downto 0); -- Valido solo per ordine 5
+        o_prev2           : out signed(7 downto 0);
+        o_prev1           : out signed(7 downto 0);
+        o_current_W       : out signed(7 downto 0);
+        o_next1           : out signed(7 downto 0);
+        o_next2           : out signed(7 downto 0);
+        o_next3           : out signed(7 downto 0); -- Valido solo per ordine 5
+
+        o_wru_done        : out std_logic;                  -- Segnale di completamento lettura finestra
+
+        -- Interfaccia con MCU (WRU è il master, MCU è lo slave)
+        o_mcu_start_req   : out std_logic;                  -- Richiesta di operazione a MCU
+        i_mcu_done_ack    : in  std_logic;                  -- Done da MCU
+        o_mcu_addr_req    : out std_logic_vector(15 downto 0); -- Indirizzo per MCU
+        o_mcu_write_flag  : out std_logic;                  -- Sempre '0' per WRU (lettura)
+        i_mcu_data_read   : in  std_logic_vector(7 downto 0) -- Dato letto da MCU
+    );
+end entity Window_Reader_Unit;
+architecture Behavioral of Window_Reader_Unit is
+
+    -- Stati della FSM interna
+    type state_type is (
+        IDLE,
+        READ_PREV3, WAIT_PREV3, -- Solo per ordine 5
+        READ_PREV2, WAIT_PREV2,
+        READ_PREV1, WAIT_PREV1,
+        READ_CURRENT_W, WAIT_CURRENT_W,
+        READ_NEXT1, WAIT_NEXT1,
+        READ_NEXT2, WAIT_NEXT2,
+        READ_NEXT3, WAIT_NEXT3, -- Solo per ordine 5
+        DONE_WRU_OP
+    );
+    signal current_state : state_type := IDLE;
+
+    -- Registri interni per memorizzare i dati della finestra
+    signal s_prev3_reg      : signed(7 downto 0) := (others => '0');
+    signal s_prev2_reg      : signed(7 downto 0) := (others => '0');
+    signal s_prev1_reg      : signed(7 downto 0) := (others => '0');
+    signal s_current_W_reg  : signed(7 downto 0) := (others => '0');
+    signal s_next1_reg      : signed(7 downto 0) := (others => '0');
+    signal s_next2_reg      : signed(7 downto 0) := (others => '0');
+    signal s_next3_reg      : signed(7 downto 0) := (others => '0');
+
+    -- Segnali di controllo per MCU (output di WRU, input di MCU)
+    signal s_mcu_start_req_int : std_logic := '0';
+    signal s_mcu_addr_req_int  : std_logic_vector(15 downto 0) := (others => '0');
+    signal s_wru_done_int      : std_logic := '0';
+
+begin
+
+    process (i_clk, i_rst)
+    begin
+        if i_rst = '1' then
+            current_state <= IDLE;
+            s_prev3_reg <= (others => '0');
+            s_prev2_reg <= (others => '0');
+            s_prev1_reg <= (others => '0');
+            s_current_W_reg <= (others => '0');
+            s_next1_reg <= (others => '0');
+            s_next2_reg <= (others => '0');
+            s_next3_reg <= (others => '0');
+            s_mcu_start_req_int <= '0';
+            s_mcu_addr_req_int <= (others => '0');
+            s_wru_done_int <= '0';
+
+        elsif rising_edge(i_clk) then
+            -- Default assignments
+            s_mcu_start_req_int <= '0';  -- Rilascia la richiesta MCU di default
+            s_wru_done_int      <= '0';  -- Resetta il done di default
+
+            case current_state is
+                when IDLE =>
+                    if i_start_wru = '1' then
+                        -- A seconda dell'ordine del filtro, inizia a leggere dal punto giusto
+                        if i_filter_order_s = '1' then -- Ordine 5
+                            current_state <= READ_PREV3;
+                        else -- Ordine 3
+                            current_state <= READ_PREV2;
+                        end if;
+                    end if;
+
+                -- FSM per la lettura sequenziale
+                -- Ogni stato READ_X chiede a MCU, ogni stato WAIT_X attende la risposta
+
+                when READ_PREV3 => -- Solo ordine 5
+                    s_mcu_addr_req_int <= std_logic_vector(unsigned(i_center_addr) - 3);
+                    s_mcu_start_req_int <= '1';
+                    current_state <= WAIT_PREV3;
+                when WAIT_PREV3 =>
+                    if i_mcu_done_ack = '1' then
+                        s_prev3_reg <= signed(i_mcu_data_read);
+                        current_state <= READ_PREV2;
+                    end if;
+
+                when READ_PREV2 =>
+                    s_mcu_addr_req_int <= std_logic_vector(unsigned(i_center_addr) - 2);
+                    s_mcu_start_req_int <= '1';
+                    current_state <= WAIT_PREV2;
+                when WAIT_PREV2 =>
+                    if i_mcu_done_ack = '1' then
+                        s_prev2_reg <= signed(i_mcu_data_read);
+                        current_state <= READ_PREV1;
+                    end if;
+
+                when READ_PREV1 =>
+                    s_mcu_addr_req_int <= std_logic_vector(unsigned(i_center_addr) - 1);
+                    s_mcu_start_req_int <= '1';
+                    current_state <= WAIT_PREV1;
+                when WAIT_PREV1 =>
+                    if i_mcu_done_ack = '1' then
+                        s_prev1_reg <= signed(i_mcu_data_read);
+                        current_state <= READ_CURRENT_W;
+                    end if;
+
+                when READ_CURRENT_W =>
+                    s_mcu_addr_req_int <= i_center_addr;
+                    s_mcu_start_req_int <= '1';
+                    current_state <= WAIT_CURRENT_W;
+                when WAIT_CURRENT_W =>
+                    if i_mcu_done_ack = '1' then
+                        s_current_W_reg <= signed(i_mcu_data_read);
+                        current_state <= READ_NEXT1;
+                    end if;
+
+                when READ_NEXT1 =>
+                    s_mcu_addr_req_int <= std_logic_vector(unsigned(i_center_addr) + 1);
+                    s_mcu_start_req_int <= '1';
+                    current_state <= WAIT_NEXT1;
+                when WAIT_NEXT1 =>
+                    if i_mcu_done_ack = '1' then
+                        s_next1_reg <= signed(i_mcu_data_read);
+                        current_state <= READ_NEXT2;
+                    end if;
+
+                when READ_NEXT2 =>
+                    s_mcu_addr_req_int <= std_logic_vector(unsigned(i_center_addr) + 2);
+                    s_mcu_start_req_int <= '1';
+                    current_state <= WAIT_NEXT2;
+                when WAIT_NEXT2 =>
+                    if i_mcu_done_ack = '1' then
+                        s_next2_reg <= signed(i_mcu_data_read);
+                        if i_filter_order_s = '1' then -- Se è ordine 5, leggi anche next3
+                            current_state <= READ_NEXT3;
+                        else -- Se è ordine 3, hai finito
+                            current_state <= DONE_WRU_OP;
+                        end if;
+                    end if;
+
+                when READ_NEXT3 => -- Solo ordine 5
+                    s_mcu_addr_req_int <= std_logic_vector(unsigned(i_center_addr) + 3);
+                    s_mcu_start_req_int <= '1';
+                    current_state <= WAIT_NEXT3;
+                when WAIT_NEXT3 =>
+                    if i_mcu_done_ack = '1' then
+                        s_next3_reg <= signed(i_mcu_data_read);
+                        current_state <= DONE_WRU_OP; -- Tutti i dati letti
+                    end if;
+
+                when DONE_WRU_OP =>
+                    s_wru_done_int <= '1'; -- Segnala il completamento
+                    if i_start_wru = '0' then -- Aspetta che la CU de-asserisca start
+                        current_state <= IDLE;
+                    end if;
+
+                when others =>
+                    current_state <= IDLE;
+            end case;
+        end if;
+    end process;
+
+    -- Assegnazione degli output dalle registrazioni interne
+    o_prev3           <= s_prev3_reg;
+    o_prev2           <= s_prev2_reg;
+    o_prev1           <= s_prev1_reg;
+    o_current_W       <= s_current_W_reg;
+    o_next1           <= s_next1_reg;
+    o_next2           <= s_next2_reg;
+    o_next3           <= s_next3_reg;
+    o_wru_done        <= s_wru_done_int;
+
+    -- Connessione dell'interfaccia MCU
+    o_mcu_start_req   <= s_mcu_start_req_int;
+    o_mcu_addr_req    <= s_mcu_addr_req_int;
+    o_mcu_write_flag  <= '0'; -- WRU esegue solo letture
+
+end architecture Behavioral;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Modulo Control Unit (CU)
+-- ------------------------------------------------
+-- orchestra tutte le interazioni tra i moduli
 entity CU is
     port (
-        rst : in STD_LOGIC;
-        clk : in STD_LOGIC;
+        i_clk      : in  std_logic;  -- Clock di sistema
+        i_rst      : in  std_logic;  -- Reset asincrono
+        i_start    : in  std_logic;  -- Segnale di avvio dal Top Module
+        i_base_addr : in  std_logic_vector(15 downto 0); -- Indirizzo di partenza in memoria (dal Top Module)
 
-        ...
-        
+        o_done     : out std_logic;  -- Segnale di completamento per il Top Module
+
+        -- Interfaccia con MCU (CU è il master)
+        o_mcu_start       : out std_logic;
+        i_mcu_done        : in  std_logic;
+        o_mcu_addr        : out std_logic_vector(15 downto 0);
+        o_mcu_write_flag  : out std_logic;
+        o_mcu_data_write  : out std_logic_vector(7 downto 0); -- Dato da scrivere a MCU
+        i_mcu_data_read   : in  std_logic_vector(7 downto 0);  -- Dato letto da MCU
+
+        -- Interfaccia con ALU3
+        o_alu3_start      : out std_logic;
+        i_alu3_done       : in  std_logic;
+        o_alu3_cn2_3      : out signed(7 downto 0);
+        o_alu3_cn1_3      : out signed(7 downto 0);
+        o_alu3_cp1_3      : out signed(7 downto 0);
+        o_alu3_cp2_3      : out signed(7 downto 0);
+        o_alu3_prev2      : out signed(7 downto 0);
+        o_alu3_prev1      : out signed(7 downto 0);
+        o_alu3_next1      : out signed(7 downto 0);
+        o_alu3_next2      : out signed(7 downto 0);
+        i_alu3_result     : in  signed(7 downto 0);
+
+        -- Interfaccia con ALU5
+        o_alu5_start      : out std_logic;
+        i_alu5_done       : in  std_logic;
+        o_alu5_cn3_5      : out signed(7 downto 0);
+        o_alu5_cn2_5      : out signed(7 downto 0);
+        o_alu5_cn1_5      : out signed(7 downto 0);
+        o_alu5_cp1_5      : out signed(7 downto 0);
+        o_alu5_cp2_5      : out signed(7 downto 0);
+        o_alu5_cp3_5      : out signed(7 downto 0);
+        o_alu5_prev3      : out signed(7 downto 0);
+        o_alu5_prev2      : out signed(7 downto 0);
+        o_alu5_prev1      : out signed(7 downto 0);
+        o_alu5_next1      : out signed(7 downto 0);
+        o_alu5_next2      : out signed(7 downto 0);
+        o_alu5_next3      : out signed(7 downto 0);
+        i_alu5_result     : in  signed(7 downto 0);
+
+        -- Interfaccia con CRU
+        o_cru_start       : out std_logic;
+        i_cru_done        : in  std_logic;
+        i_cru_k           : in  std_logic_vector(15 downto 0);
+        i_cru_s           : in  std_logic;
+        i_cru_cn2_3       : in  signed(7 downto 0);
+        i_cru_cn1_3       : in  signed(7 downto 0);
+        i_cru_cp1_3       : in  signed(7 downto 0);
+        i_cru_cp2_3       : in  signed(7 downto 0);
+        i_cru_cn3_5       : in  signed(7 downto 0);
+        i_cru_cn2_5       : in  signed(7 downto 0);
+        i_cru_cn1_5       : in  signed(7 downto 0);
+        i_cru_cp1_5       : in  signed(7 downto 0);
+        i_cru_cp2_5       : in  signed(7 downto 0);
+        i_cru_cp3_5       : in  signed(7 downto 0);
+        i_cru_w1_addr     : in  std_logic_vector(15 downto 0);
+
+        -- NUOVA INTERFACCIA con WRU
+        o_wru_start       : out std_logic;
+        i_wru_done        : in  std_logic;
+        o_wru_center_addr : out std_logic_vector(15 downto 0);
+        o_wru_filter_order_s : out std_logic;
+        i_wru_prev3       : in  signed(7 downto 0);
+        i_wru_prev2       : in  signed(7 downto 0);
+        i_wru_prev1       : in  signed(7 downto 0);
+        i_wru_current_W   : in  signed(7 downto 0);
+        i_wru_next1       : in  signed(7 downto 0);
+        i_wru_next2       : in  signed(7 downto 0);
+        i_wru_next3       : in  signed(7 downto 0)
     );
 end entity CU;
 
 architecture Behavioral of CU is
 
-    -- Segnali di controllo per i moduli
-    signal start_mcu, done_mcu : std_logic;
-    signal start_alu3, done_alu3 : std_logic;
-    signal start_alu5, done_alu5 : std_logic;
+    -- Definizione degli stati della FSM principale
+    type main_state_type is (
+        IDLE,
+        CONFIG_READ, WAIT_CONFIG,
+        START_WINDOW_READ, WAIT_WINDOW_READ,
+        COMPUTE_FILTER, WAIT_ALU_DONE,
+        WRITE_RESULT, WAIT_WRITE_RESULT,
+        CHECK_LOOP_END,
+        DONE_OPERATION
+    );
+    signal current_main_state : main_state_type := IDLE;
 
-    -- Registri per i dati
-    signal mem_w1_addr    : std_logic_vector(15 downto 0) := (others => '0'); -- Indirizzo del primo byte della sequenza da filtrare
-    signal mem_init_addr  : std_logic_vector(15 downto 0) := (others => '0'); -- Indirizzo del primo byte dell'input
-    signal k1, k2         : std_logic_vector(7 downto 0) := (others => '0');  -- Lunghezza sequenza e ordine filtro
-    signal k              : unsigned(15 downto 0) := to_unsigned(0, 16);  -- Lunghezza sequenza e ordine filtro
-    signal s              : std_logic := '0';
-    signal data_counter   : integer := 0;  -- Contatore per lettura dati
-    signal coeff_counter  : integer := 0;  -- Contatore per lettura coefficienti
+    -- Segnali di controllo per i moduli (registrati per stabilità)
+    signal s_mcu_start_reg       : std_logic := '0';
+    signal s_mcu_addr_reg        : std_logic_vector(15 downto 0) := (others => '0');
+    signal s_mcu_write_flag_reg  : std_logic := '0';
+    signal s_mcu_data_write_reg  : std_logic_vector(7 downto 0) := (others => '0');
 
+    signal s_alu3_start_reg      : std_logic := '0';
+    signal s_alu5_start_reg      : std_logic := '0';
+
+    signal s_cru_start_reg       : std_logic := '0';
+
+    signal s_wru_start_reg       : std_logic := '0';
+    signal s_wru_center_addr_reg : std_logic_vector(15 downto 0) := (others => '0');
+    signal s_wru_filter_order_s_reg : std_logic := '0';
+
+    -- Registri per i parametri letti da CRU (copie locali)
+    signal s_k_val           : unsigned(15 downto 0) := (others => '0');
+    signal s_s_val           : std_logic := '0';
+    signal s_w1_addr_val     : std_logic_vector(15 downto 0) := (others => '0');
+
+    -- Registri per i coefficienti (copie locali da CRU)
+    signal s_c_n2_3_val : signed(7 downto 0)  := (others => '0');
+    signal s_c_n1_3_val : signed(7 downto 0)  := (others => '0');
+    signal s_c_p1_3_val : signed(7 downto 0)  := (others => '0');
+    signal s_c_p2_3_val : signed(7 downto 0)  := (others => '0');
     
-    -- coefficienti di ordine 3
-    signal c_n2_3 : signed(7 downto 0)  := to_signed(0, 8);
-    signal c_n1_3 : signed(7 downto 0)  := to_signed(0, 8);
-    signal c_p1_3 : signed(7 downto 0)  := to_signed(0, 8);
-    signal c_p2_3 : signed(7 downto 0)  := to_signed(0, 8);
-    
-    -- coefficienti di ordine 5
-    signal c_n3_5 : signed(7 downto 0)  := to_signed(0, 8);
-    signal c_n2_5 : signed(7 downto 0)  := to_signed(0, 8);
-    signal c_n1_5 : signed(7 downto 0)  := to_signed(0, 8);
-    signal c_p1_5 : signed(7 downto 0)  := to_signed(0, 8);
-    signal c_p2_5 : signed(7 downto 0)  := to_signed(0, 8);
-    signal c_p3_5 : signed(7 downto 0)  := to_signed(0, 8);
+    signal s_c_n3_5_val : signed(7 downto 0)  := (others => '0');
+    signal s_c_n2_5_val : signed(7 downto 0)  := (others => '0');
+    signal s_c_n1_5_val : signed(7 downto 0)  := (others => '0');
+    signal s_c_p1_5_val : signed(7 downto 0)  := (others => '0');
+    signal s_c_p2_5_val : signed(7 downto 0)  := (others => '0');
+    signal s_c_p3_5_val : signed(7 downto 0)  := (others => '0');
      
-    -- valori temporanei da dare in pasto alle ALU
-    signal prev3 : signed(7 downto 0)      := to_signed(0, 8);
-    signal prev2 : signed(7 downto 0)      := to_signed(0, 8);
-    signal prev1 : signed(7 downto 0)      := to_signed(0, 8);
-    signal current_W : signed(7 downto 0)  := to_signed(0, 8);
-    signal next1 : signed(7 downto 0)      := to_signed(0, 8);
-    signal next2 : signed(7 downto 0)      := to_signed(0, 8);
-    signal next3 : signed(7 downto 0)      := to_signed(0, 8);
+    -- Registri per i valori della finestra del filtro (copie locali da WRU)
+    signal s_prev3_val : signed(7 downto 0)      := (others => '0');
+    signal s_prev2_val : signed(7 downto 0)      := (others => '0');
+    signal s_prev1_val : signed(7 downto 0)      := (others => '0');
+    signal s_current_W_val : signed(7 downto 0)  := (others => '0');
+    signal s_next1_val : signed(7 downto 0)      := (others => '0');
+    signal s_next2_val : signed(7 downto 0)      := (others => '0');
+    signal s_next3_val : signed(7 downto 0)      := (others => '0');
+    
+    -- Contatore per iterare sui dati W
+    signal s_data_counter : integer := 0;  
 
+    -- Segnale di output finale
+    signal s_done_output : std_logic := '0';
 
 begin
     
-    process (clk, rst)
-
-        ...
-
+    process (i_clk, i_rst)
     begin
-        
-        ...
+        if i_rst = '1' then
+            current_main_state <= IDLE;
+            s_done_output <= '0';
+            s_mcu_start_reg <= '0';
+            s_alu3_start_reg <= '0';
+            s_alu5_start_reg <= '0';
+            s_cru_start_reg <= '0';
+            s_wru_start_reg <= '0';
+            s_data_counter <= 0;
+            -- Reset di tutti i registri interni che mantengono stato
+            s_k_val <= (others => '0');
+            s_s_val <= '0';
+            s_w1_addr_val <= (others => '0');
+            s_c_n2_3_val <= (others => '0'); s_c_n1_3_val <= (others => '0'); s_c_p1_3_val <= (others => '0'); s_c_p2_3_val <= (others => '0');
+            s_c_n3_5_val <= (others => '0'); s_c_n2_5_val <= (others => '0'); s_c_n1_5_val <= (others => '0'); s_c_p1_5_val <= (others => '0'); s_c_p2_5_val <= (others => '0'); s_c_p3_5_val <= (others => '0');
+            s_prev3_val <= (others => '0'); s_prev2_val <= (others => '0'); s_prev1_val <= (others => '0'); s_current_W_val <= (others => '0');
+            s_next1_val <= (others => '0'); s_next2_val <= (others => '0'); s_next3_val <= (others => '0');
 
+        elsif rising_edge(i_clk) then
+            -- Default assignments per il prossimo ciclo
+            s_done_output <= '0';
+            s_mcu_start_reg <= '0';
+            s_alu3_start_reg <= '0';
+            s_alu5_start_reg <= '0';
+            s_cru_start_reg <= '0';
+            s_wru_start_reg <= '0'; -- Resetta la richiesta a WRU
+            s_mcu_write_flag_reg <= '0'; -- Default a lettura per MCU
+            s_mcu_data_write_reg <= (others => '0'); -- Default data to write
+
+            case current_main_state is
+                when IDLE =>
+                    if i_start = '1' then
+                        s_cru_start_reg <= '1'; -- Avvia la lettura della configurazione
+                        current_main_state <= WAIT_CONFIG;
+                    end if;
+
+                when WAIT_CONFIG =>
+                    s_cru_start_reg <= '0'; -- Rilascia la richiesta a CRU
+                    if i_cru_done = '1' then
+                        -- Copia i parametri letti da CRU nei registri locali del CU
+                        s_k_val <= unsigned(i_cru_k);
+                        s_s_val <= i_cru_s;
+                        s_w1_addr_val <= i_cru_w1_addr;
+                        s_c_n2_3_val <= i_cru_cn2_3; s_c_n1_3_val <= i_cru_cn1_3; s_c_p1_3_val <= i_cru_cp1_3; s_c_p2_3_val <= i_cru_cp2_3;
+                        s_c_n3_5_val <= i_cru_cn3_5; s_c_n2_5_val <= i_cru_cn2_5; s_c_n1_5_val <= i_cru_cn1_5; s_c_p1_5_val <= i_cru_cp1_5; s_c_p2_5_val <= i_cru_cp2_5; s_c_p3_5_val <= i_cru_cp3_5;
+                        
+                        s_data_counter <= 0; -- Resetta il contatore dati per l'inizio del filtro
+                        current_main_state <= START_WINDOW_READ; -- Inizia la lettura della prima finestra
+                    end if;
+
+                when START_WINDOW_READ =>
+                    -- Avvia la lettura della finestra da WRU
+                    s_wru_start_reg <= '1';
+                    s_wru_center_addr_reg <= std_logic_vector(unsigned(s_w1_addr_val) + to_unsigned(s_data_counter, 16)); -- Indirizzo del corrente W
+                    s_wru_filter_order_s_reg <= s_s_val;
+                    current_main_state <= WAIT_WINDOW_READ;
+
+                when WAIT_WINDOW_READ =>
+                    s_wru_start_reg <= '0'; -- Rilascia la richiesta a WRU
+                    if i_wru_done = '1' then
+                        -- Copia i dati della finestra letti da WRU nei registri locali del CU
+                        s_prev3_val <= i_wru_prev3;
+                        s_prev2_val <= i_wru_prev2;
+                        s_prev1_val <= i_wru_prev1;
+                        s_current_W_val <= i_wru_current_W;
+                        s_next1_val <= i_wru_next1;
+                        s_next2_val <= i_wru_next2;
+                        s_next3_val <= i_wru_next3;
+                        
+                        current_main_state <= COMPUTE_FILTER; -- Passa al calcolo del filtro
+                    end if;
+                
+                when COMPUTE_FILTER =>
+                    -- Seleziona l'ALU e avvia il calcolo, passando i dati della finestra e i coefficienti
+                    if s_s_val = '0' then -- Ordine 3
+                        s_alu3_start_reg <= '1';
+                        o_alu3_cn2_3 <= s_c_n2_3_val; o_alu3_cn1_3 <= s_c_n1_3_val;
+                        o_alu3_cp1_3 <= s_c_p1_3_val; o_alu3_cp2_3 <= s_c_p2_3_val;
+                        o_alu3_prev2 <= s_prev2_val; o_alu3_prev1 <= s_prev1_val;
+                        o_alu3_next1 <= s_next1_val; o_alu3_next2 <= s_next2_val;
+                    else -- Ordine 5
+                        s_alu5_start_reg <= '1';
+                        o_alu5_cn3_5 <= s_c_n3_5_val; o_alu5_cn2_5 <= s_c_n2_5_val; o_alu5_cn1_5 <= s_c_n1_5_val;
+                        o_alu5_cp1_5 <= s_c_p1_5_val; o_alu5_cp2_5 <= s_c_p2_5_val; o_alu5_cp3_5 <= s_c_p3_5_val;
+                        o_alu5_prev3 <= s_prev3_val; o_alu5_prev2 <= s_prev2_val; o_alu5_prev1 <= s_prev1_val;
+                        o_alu5_next1 <= s_next1_val; o_alu5_next2 <= s_next2_val; o_alu5_next3 <= s_next3_val;
+                    end if;
+                    current_main_state <= WAIT_ALU_DONE; -- Aspetta il done della ALU
+
+                when WAIT_ALU_DONE =>
+                    -- Aspetta il completamento dell'ALU
+                    if (s_s_val = '0' and i_alu3_done = '1') or (s_s_val = '1' and i_alu5_done = '1') then
+                        current_main_state <= WRITE_RESULT; -- L'ALU ha finito, scrivi il risultato
+                    end if;
+
+                when WRITE_RESULT =>
+                    -- Scrivi il risultato del filtro in memoria tramite MCU
+                    s_mcu_write_flag_reg <= '1'; -- Scrittura
+                    s_mcu_addr_reg <= std_logic_vector(unsigned(s_w1_addr_val) + s_k_val + to_unsigned(s_data_counter, 16));
+                    if s_s_val = '0' then
+                        s_mcu_data_write_reg <= std_logic_vector(i_alu3_result);
+                    else
+                        s_mcu_data_write_reg <= std_logic_vector(i_alu5_result);
+                    end if;
+                    s_mcu_start_reg <= '1'; -- Avvia la scrittura MCU
+                    current_main_state <= WAIT_WRITE_RESULT;
+
+                when WAIT_WRITE_RESULT =>
+                    s_mcu_start_reg <= '0'; -- Rilascia la richiesta MCU
+                    if i_mcu_done = '1' then
+                        s_data_counter <= s_data_counter + 1; -- Incrementa il contatore dei dati processati
+                        current_main_state <= CHECK_LOOP_END; -- Controlla se il loop è finito
+                    end if;
+
+                when CHECK_LOOP_END =>
+                    if s_data_counter = to_integer(s_k_val) then -- Se tutti i dati sono stati processati
+                        current_main_state <= DONE_OPERATION;
+                    else
+                        current_main_state <= START_WINDOW_READ; -- Altrimenti, leggi la prossima finestra
+                    end if;
+
+                when DONE_OPERATION =>
+                    s_done_output <= '1'; -- Segnale di completamento per il Top Module
+                    if i_start = '0' then -- Aspetta che il Top Module de-asserisca start
+                        current_main_state <= IDLE;
+                    end if;
+
+                when others =>
+                    current_main_state <= IDLE; -- Stato di fallback
+            end case;
+        end if;
     end process;
 
+    -- Assegnazione delle uscite del Control Unit
+    o_done <= s_done_output;
+
+    o_mcu_start <= s_mcu_start_reg;
+    o_mcu_addr <= s_mcu_addr_reg;
+    o_mcu_write_flag <= s_mcu_write_flag_reg;
+    o_mcu_data_write <= s_mcu_data_write_reg;
+    i_mcu_data_read <= i_mcu_data_read; -- Pass-through per il dato letto da MCU verso il CU
+
+    o_alu3_start <= s_alu3_start_reg;
+    o_alu3_cn2_3 <= s_c_n2_3_val; o_alu3_cn1_3 <= s_c_n1_3_val;
+    o_alu3_cp1_3 <= s_c_p1_3_val; o_alu3_cp2_3 <= s_c_p2_3_val;
+    o_alu3_prev2 <= s_prev2_val; o_alu3_prev1 <= s_prev1_val;
+    o_alu3_next1 <= s_next1_val; o_alu3_next2 <= s_next2_val;
+
+    o_alu5_start <= s_alu5_start_reg;
+    o_alu5_cn3_5 <= s_c_n3_5_val; o_alu5_cn2_5 <= s_c_n2_5_val; o_alu5_cn1_5 <= s_c_n1_5_val;
+    o_alu5_cp1_5 <= s_c_p1_5_val; o_alu5_cp2_5 <= s_c_p2_5_val; o_alu5_cp3_5 <= s_c_p3_5_val;
+    o_alu5_prev3 <= s_prev3_val; o_alu5_prev2 <= s_prev2_val; o_alu5_prev1 <= s_prev1_val;
+    o_alu5_next1 <= s_next1_val; o_alu5_next2 <= s_next2_val; o_alu5_next3 <= s_next3_val;
+
+    o_cru_start <= s_cru_start_reg;
+
+    -- Connessione delle uscite WRU
+    o_wru_start <= s_wru_start_reg;
+    o_wru_center_addr <= s_wru_center_addr_reg;
+    o_wru_filter_order_s <= s_wru_filter_order_s_reg;
 
 end architecture Behavioral;
 
 
 
--- Top Module con stessa interfaccia del modulo iniziale
--- ----------------------------------------------------
 
+
+
+
+
+
+
+-- Componente MCU (Memory Controller Unit)
+component MCU is
+    port (
+        i_clk             : in  std_logic;
+        i_rst             : in  std_logic;
+        i_start           : in  std_logic;                  -- Segnale di avvio da CU/WRU
+        i_addr            : in  std_logic_vector(15 downto 0); -- Indirizzo
+        i_write_flag      : in  std_logic;                  -- '1' per scrittura, '0' per lettura
+        i_data_to_write   : in  std_logic_vector(7 downto 0); -- Dato da scrivere
+        o_done            : out std_logic;                  -- Segnale di completamento
+        o_data_read       : out std_logic_vector(7 downto 0)  -- Dato letto
+    );
+end component;
+
+-- Componente CRU (Configuration Reader Unit)
+component CRU is
+    port (
+        i_clk       : in  std_logic;
+        i_rst       : in  std_logic;
+        i_start     : in  std_logic;
+        o_done      : out std_logic;
+        o_k         : out std_logic_vector(15 downto 0);    -- Lunghezza della sequenza W
+        o_s         : out std_logic;                      -- Ordine del filtro ('0' per 3, '1' per 5)
+        o_cn2_3     : out signed(7 downto 0);
+        o_cn1_3     : out signed(7 downto 0);
+        o_cp1_3     : out signed(7 downto 0);
+        o_cp2_3     : out signed(7 downto 0);
+        o_cn3_5     : out signed(7 downto 0);
+        o_cn2_5     : out signed(7 downto 0);
+        o_cn1_5     : out signed(7 downto 0);
+        o_cp1_5     : out signed(7 downto 0);
+        o_cp2_5     : out signed(7 downto 0);
+        o_cp3_5     : out signed(7 downto 0);
+        o_w1_addr   : out std_logic_vector(15 downto 0)   -- Indirizzo di partenza per la sequenza W
+    );
+end component;
+
+-- Componente ALU3 (Arithmetic Logic Unit per Ordine 3)
+component ALU3 is
+    port (
+        i_clk       : in  std_logic;
+        i_rst       : in  std_logic;
+        i_start     : in  std_logic;
+        o_done      : out std_logic;
+        i_cn2       : in  signed(7 downto 0);
+        i_cn1       : in  signed(7 downto 0);
+        i_cp1       : in  signed(7 downto 0);
+        i_cp2       : in  signed(7 downto 0);
+        i_prev2     : in  signed(7 downto 0);
+        i_prev1     : in  signed(7 downto 0);
+        i_next1     : in  signed(7 downto 0);
+        i_next2     : in  signed(7 downto 0);
+        o_result    : out signed(7 downto 0)
+    );
+end component;
+
+-- Componente ALU5 (Arithmetic Logic Unit per Ordine 5)
+component ALU5 is
+    port (
+        i_clk       : in  std_logic;
+        i_rst       : in  std_logic;
+        i_start     : in  std_logic;
+        o_done      : out std_logic;
+        i_cn3       : in  signed(7 downto 0);
+        i_cn2       : in  signed(7 downto 0);
+        i_cn1       : in  signed(7 downto 0);
+        i_cp1       : in  signed(7 downto 0);
+        i_cp2       : in  signed(7 downto 0);
+        i_cp3       : in  signed(7 downto 0);
+        i_prev3     : in  signed(7 downto 0);
+        i_prev2     : in  signed(7 downto 0);
+        i_prev1     : in  signed(7 downto 0);
+        i_next1     : in  signed(7 downto 0);
+        i_next2     : in  signed(7 downto 0);
+        i_next3     : in  signed(7 downto 0);
+        o_result    : out signed(7 downto 0)
+    );
+end component;
+
+-- Componente Window_Reader_Unit (WRU)
+component Window_Reader_Unit is
+    port (
+        i_clk             : in  std_logic;
+        i_rst             : in  std_logic;
+        i_start_wru       : in  std_logic;                  -- Avvia la lettura della finestra
+        i_center_addr     : in  std_logic_vector(15 downto 0); -- L'indirizzo del valore centrale (W(i))
+        i_filter_order_s  : in  std_logic;                  -- '0' per ordine 3, '1' per ordine 5
+
+        -- Output dei dati della finestra
+        o_prev3           : out signed(7 downto 0);
+        o_prev2           : out signed(7 downto 0);
+        o_prev1           : out signed(7 downto 0);
+        o_current_W       : out signed(7 downto 0);
+        o_next1           : out signed(7 downto 0);
+        o_next2           : out signed(7 downto 0);
+        o_next3           : out signed(7 downto 0);
+
+        o_wru_done        : out std_logic;                  -- Segnale di completamento lettura finestra
+
+        -- Interfaccia con MCU (WRU è il master, MCU è lo slave)
+        o_mcu_start_req   : out std_logic;
+        i_mcu_done_ack    : in  std_logic;
+        o_mcu_addr_req    : out std_logic_vector(15 downto 0);
+        o_mcu_write_flag  : out std_logic;
+        i_mcu_data_read   : in  std_logic_vector(7 downto 0)
+    );
+end component;
+
+-- Componente CU (Control Unit)
+component CU is
+    port (
+        i_clk      : in  std_logic;
+        i_rst      : in  std_logic;
+        i_start    : in  std_logic;
+        i_base_addr : in  std_logic_vector(15 downto 0);
+
+        o_done     : out std_logic;
+
+        -- Interfaccia con MCU (CU è il master, WRU è lo slave per le letture della finestra)
+        o_mcu_start       : out std_logic;
+        i_mcu_done        : in  std_logic;
+        o_mcu_addr        : out std_logic_vector(15 downto 0);
+        o_mcu_write_flag  : out std_logic;
+        o_mcu_data_write  : out std_logic_vector(7 downto 0);
+        i_mcu_data_read   : in  std_logic_vector(7 downto 0);
+
+        -- Interfaccia con ALU3
+        o_alu3_start      : out std_logic;
+        i_alu3_done       : in  std_logic;
+        o_alu3_cn2_3      : out signed(7 downto 0);
+        o_alu3_cn1_3      : out signed(7 downto 0);
+        o_alu3_cp1_3      : out signed(7 downto 0);
+        o_alu3_cp2_3      : out signed(7 downto 0);
+        o_alu3_prev2      : out signed(7 downto 0);
+        o_alu3_prev1      : out signed(7 downto 0);
+        o_alu3_next1      : out signed(7 downto 0);
+        o_alu3_next2      : out signed(7 downto 0);
+        i_alu3_result     : in  signed(7 downto 0);
+
+        -- Interfaccia con ALU5
+        o_alu5_start      : out std_logic;
+        i_alu5_done       : in  std_logic;
+        o_alu5_cn3_5      : out signed(7 downto 0);
+        o_alu5_cn2_5      : out signed(7 downto 0);
+        o_alu5_cn1_5      : out signed(7 downto 0);
+        o_alu5_cp1_5      : out signed(7 downto 0);
+        o_alu5_cp2_5      : out signed(7 downto 0);
+        o_alu5_cp3_5      : out signed(7 downto 0);
+        o_alu5_prev3      : out signed(7 downto 0);
+        o_alu5_prev2      : out signed(7 downto 0);
+        o_alu5_prev1      : out signed(7 downto 0);
+        o_alu5_next1      : out signed(7 downto 0);
+        o_alu5_next2      : out signed(7 downto 0);
+        o_alu5_next3      : out signed(7 downto 0);
+        i_alu5_result     : in  signed(7 downto 0);
+
+        -- Interfaccia con CRU
+        o_cru_start       : out std_logic;
+        i_cru_done        : in  std_logic;
+        i_cru_k           : in  std_logic_vector(15 downto 0);
+        i_cru_s           : in  std_logic;
+        i_cru_cn2_3       : in  signed(7 downto 0);
+        i_cru_cn1_3       : in  signed(7 downto 0);
+        i_cru_cp1_3       : in  signed(7 downto 0);
+        i_cru_cp2_3       : in  signed(7 downto 0);
+        i_cru_cn3_5       : in  signed(7 downto 0);
+        i_cru_cn2_5       : in  signed(7 downto 0);
+        i_cru_cn1_5       : in  signed(7 downto 0);
+        i_cru_cp1_5       : in  signed(7 downto 0);
+        i_cru_cp2_5       : in  signed(7 downto 0);
+        i_cru_cp3_5       : in  signed(7 downto 0);
+        i_cru_w1_addr     : in  std_logic_vector(15 downto 0);
+
+        -- Interfaccia con WRU
+        o_wru_start       : out std_logic;
+        i_wru_done        : in  std_logic;
+        o_wru_center_addr : out std_logic_vector(15 downto 0);
+        o_wru_filter_order_s : out std_logic;
+        i_wru_prev3       : in  signed(7 downto 0);
+        i_wru_prev2       : in  signed(7 downto 0);
+        i_wru_prev1       : in  signed(7 downto 0);
+        i_wru_current_W   : in  signed(7 downto 0);
+        i_wru_next1       : in  signed(7 downto 0);
+        i_wru_next2       : in  signed(7 downto 0);
+        i_wru_next3       : in  signed(7 downto 0)
+    );
+end component;
+
+-- Top Module con stessa interfaccia del modulo monolitico originale
+-- ----------------------------------------------------
 entity top_module is
     port (
-        i_clk      : in  std_logic;  -- Clock di sistema
-        i_rst      : in  std_logic;  -- Reset asincrono
-        i_start    : in  std_logic;  -- Segnale di avvio
-        i_add      : in  std_logic_vector(15 downto 0); -- Indirizzo di partenza in memoria
-
-        o_done     : out std_logic;  -- Segnale di completamento
-
-        o_mem_addr : out std_logic_vector(15 downto 0); -- Indirizzo di memoria
-        i_mem_data : in  std_logic_vector(7 downto 0);  -- Dato letto dalla memoria
-        o_mem_data : out std_logic_vector(7 downto 0);  -- Dato da scrivere in memoria
-        o_mem_we   : out std_logic;  -- Segnale di scrittura memoria
-        o_mem_en   : out std_logic   -- Segnale di abilitazione memoria
+        clk             : in  std_logic;  -- Clock di sistema
+        rst             : in  std_logic;  -- Reset asincrono
+        start_operation : in  std_logic;  -- Segnale di avvio esterno
+        base_address    : in  std_logic_vector(15 downto 0); -- Indirizzo base per la sequenza W (es. 0x0000)
+        operation_done  : out std_logic   -- Segnale di completamento esterno
     );
 end entity top_module;
 
---devo istanziare gli altri moduli e connettere le porte tra di loro
+architecture Structural of top_module is
 
-architecture Behavioral of top_module is
+    -- Segnali interni per le interconnessioni tra i moduli
+    -- Segnali MCU
+    signal s_mcu_start_cu      : std_logic;
+    signal s_mcu_addr_cu       : std_logic_vector(15 downto 0);
+    signal s_mcu_write_flag_cu : std_logic;
+    signal s_mcu_data_write_cu : std_logic_vector(7 downto 0);
+    
+    signal s_mcu_start_wru     : std_logic;
+    signal s_mcu_addr_wru      : std_logic_vector(15 downto 0);
+    signal s_mcu_write_flag_wru: std_logic; -- Sarà sempre '0' da WRU (solo letture)
+    
+    signal s_mcu_done_from_mcu : std_logic;
+    signal s_mcu_data_read_from_mcu : std_logic_vector(7 downto 0);
+
+    -- Multiplexer per i segnali MCU: MCU è lo slave, CU e WRU sono master
+    signal s_mcu_start_final       : std_logic;
+    signal s_mcu_addr_final        : std_logic_vector(15 downto 0);
+    signal s_mcu_write_flag_final  : std_logic;
+    signal s_mcu_data_write_final  : std_logic_vector(7 downto 0);
+
+    -- Segnali CRU
+    signal s_cru_start         : std_logic;
+    signal s_cru_done          : std_logic;
+    signal s_cru_k             : std_logic_vector(15 downto 0);
+    signal s_cru_s             : std_logic;
+    signal s_cru_cn2_3         : signed(7 downto 0);
+    signal s_cru_cn1_3         : signed(7 downto 0);
+    signal s_cru_cp1_3         : signed(7 downto 0);
+    signal s_cru_cp2_3         : signed(7 downto 0);
+    signal s_cru_cn3_5         : signed(7 downto 0);
+    signal s_cru_cn2_5         : signed(7 downto 0);
+    signal s_cru_cn1_5         : signed(7 downto 0);
+    signal s_cru_cp1_5         : signed(7 downto 0);
+    signal s_cru_cp2_5         : signed(7 downto 0);
+    signal s_cru_cp3_5         : signed(7 downto 0);
+    signal s_cru_w1_addr       : std_logic_vector(15 downto 0);
+
+    -- Segnali ALU3
+    signal s_alu3_start        : std_logic;
+    signal s_alu3_done         : std_logic;
+    signal s_alu3_cn2_3        : signed(7 downto 0);
+    signal s_alu3_cn1_3        : signed(7 downto 0);
+    signal s_alu3_cp1_3        : signed(7 downto 0);
+    signal s_alu3_cp2_3        : signed(7 downto 0);
+    signal s_alu3_prev2        : signed(7 downto 0);
+    signal s_alu3_prev1        : signed(7 downto 0);
+    signal s_alu3_next1        : signed(7 downto 0);
+    signal s_alu3_next2        : signed(7 downto 0);
+    signal s_alu3_result       : signed(7 downto 0);
+
+    -- Segnali ALU5
+    signal s_alu5_start        : std_logic;
+    signal s_alu5_done         : std_logic;
+    signal s_alu5_cn3_5        : signed(7 downto 0);
+    signal s_alu5_cn2_5        : signed(7 downto 0);
+    signal s_alu5_cn1_5        : signed(7 downto 0);
+    signal s_alu5_cp1_5        : signed(7 downto 0);
+    signal s_alu5_cp2_5        : signed(7 downto 0);
+    signal s_alu5_cp3_5        : signed(7 downto 0);
+    signal s_alu5_prev3        : signed(7 downto 0);
+    signal s_alu5_prev2        : signed(7 downto 0);
+    signal s_alu5_prev1        : signed(7 downto 0);
+    signal s_alu5_next1        : signed(7 downto 0);
+    signal s_alu5_next2        : signed(7 downto 0);
+    signal s_alu5_next3        : signed(7 downto 0);
+    signal s_alu5_result       : signed(7 downto 0);
+
+    -- Segnali WRU
+    signal s_wru_start_cu      : std_logic;
+    signal s_wru_done          : std_logic;
+    signal s_wru_center_addr_cu : std_logic_vector(15 downto 0);
+    signal s_wru_filter_order_s_cu : std_logic;
+    signal s_wru_prev3_out     : signed(7 downto 0);
+    signal s_wru_prev2_out     : signed(7 downto 0);
+    signal s_wru_prev1_out     : signed(7 downto 0);
+    signal s_wru_current_W_out : signed(7 downto 0);
+    signal s_wru_next1_out     : signed(7 downto 0);
+    signal s_wru_next2_out     : signed(7 downto 0);
+    signal s_wru_next3_out     : signed(7 downto 0);
 
 begin
-    
-end architecture Behavioral;
+
+    -- Istanziazione dei Moduli
+    -- -------------------------
+
+    -- Istanziazione della Memory Control Unit (MCU)
+    MCU_INST : MCU
+    port map (
+        i_clk             => clk,
+        i_rst             => rst,
+        i_start           => s_mcu_start_final,      -- Multiplexed start da CU o WRU
+        i_addr            => s_mcu_addr_final,         -- Multiplexed address da CU o WRU
+        i_write_flag      => s_mcu_write_flag_final,   -- Multiplexed write_flag da CU o WRU
+        i_data_to_write   => s_mcu_data_write_cu,      -- Solo CU scrive dati
+        o_done            => s_mcu_done_from_mcu,      -- MCU done per CU e WRU
+        o_data_read       => s_mcu_data_read_from_mcu  -- MCU data read per CU e WRU
+    );
+
+    -- Istanziazione della Configuration Reader Unit (CRU)
+    CRU_INST : CRU
+    port map (
+        i_clk       => clk,
+        i_rst       => rst,
+        i_start     => s_cru_start,
+        o_done      => s_cru_done,
+        o_k         => s_cru_k,
+        o_s         => s_cru_s,
+        o_cn2_3     => s_cru_cn2_3,
+        o_cn1_3     => s_cru_cn1_3,
+        o_cp1_3     => s_cru_cp1_3,
+        o_cp2_3     => s_cru_cp2_3,
+        o_cn3_5     => s_cru_cn3_5,
+        o_cn2_5     => s_cru_cn2_5,
+        o_cn1_5     => s_cru_cn1_5,
+        o_cp1_5     => s_cru_cp1_5,
+        o_cp2_5     => s_cru_cp2_5,
+        o_cp3_5     => s_cru_cp3_5,
+        o_w1_addr   => s_cru_w1_addr
+    );
+
+    -- Istanziazione della Window Reader Unit (WRU)
+    WRU_INST : Window_Reader_Unit
+    port map (
+        i_clk             => clk,
+        i_rst             => rst,
+        i_start_wru       => s_wru_start_cu,           -- Start dalla CU
+        i_center_addr     => s_wru_center_addr_cu,     -- Indirizzo centrale dalla CU
+        i_filter_order_s  => s_wru_filter_order_s_cu,  -- Ordine del filtro dalla CU
+        o_prev3           => s_wru_prev3_out,          -- Output prev3 per CU
+        o_prev2           => s_wru_prev2_out,          -- Output prev2 per CU
+        o_prev1           => s_wru_prev1_out,          -- Output prev1 per CU
+        o_current_W       => s_wru_current_W_out,      -- Output current_W per CU
+        o_next1           => s_wru_next1_out,          -- Output next1 per CU
+        o_next2           => s_wru_next2_out,          -- Output next2 per CU
+        o_next3           => s_wru_next3_out,          -- Output next3 per CU
+        o_wru_done        => s_wru_done,               -- Done di WRU per CU
+        o_mcu_start_req   => s_mcu_start_wru,          -- Richiesta MCU da WRU
+        i_mcu_done_ack    => s_mcu_done_from_mcu,      -- Ack da MCU per WRU
+        o_mcu_addr_req    => s_mcu_addr_wru,           -- Indirizzo MCU da WRU
+        o_mcu_write_flag  => s_mcu_write_flag_wru,     -- Write_flag (sempre '0') da WRU
+        i_mcu_data_read   => s_mcu_data_read_from_mcu  -- Data letto da MCU per WRU
+    );
+
+    -- Istanziazione dell'ALU3
+    ALU3_INST : ALU3
+    port map (
+        i_clk       => clk,
+        i_rst       => rst,
+        i_start     => s_alu3_start,
+        o_done      => s_alu3_done,
+        i_cn2       => s_alu3_cn2_3,
+        i_cn1       => s_alu3_cn1_3,
+        i_cp1       => s_alu3_cp1_3,
+        i_cp2       => s_alu3_cp2_3,
+        i_prev2     => s_alu3_prev2,
+        i_prev1     => s_alu3_prev1,
+        i_next1     => s_alu3_next1,
+        i_next2     => s_alu3_next2,
+        o_result    => s_alu3_result
+    );
+
+    -- Istanziazione dell'ALU5
+    ALU5_INST : ALU5
+    port map (
+        i_clk       => clk,
+        i_rst       => rst,
+        i_start     => s_alu5_start,
+        o_done      => s_alu5_done,
+        i_cn3       => s_alu5_cn3_5,
+        i_cn2       => s_alu5_cn2_5,
+        i_cn1       => s_alu5_cn1_5,
+        i_cp1       => s_alu5_cp1_5,
+        i_cp2       => s_alu5_cp2_5,
+        i_cp3       => s_alu5_cp3_5,
+        i_prev3     => s_alu5_prev3,
+        i_prev2     => s_alu5_prev2,
+        i_prev1     => s_alu5_prev1,
+        i_next1     => s_alu5_next1,
+        i_next2     => s_alu5_next2,
+        i_next3     => s_alu5_next3,
+        o_result    => s_alu5_result
+    );
+
+    -- Istanziazione della Control Unit (CU)
+    CU_INST : CU
+    port map (
+        i_clk      => clk,
+        i_rst      => rst,
+        i_start    => start_operation,  -- Start esterno al CU
+        i_base_addr => base_address,    -- Indirizzo base esterno al CU
+        o_done     => operation_done,   -- Done del CU all'esterno
+
+        -- Connessioni MCU (CU come master, ma multiplexate con WRU)
+        o_mcu_start       => s_mcu_start_cu,
+        i_mcu_done        => s_mcu_done_from_mcu,
+        o_mcu_addr        => s_mcu_addr_cu,
+        o_mcu_write_flag  => s_mcu_write_flag_cu,
+        o_mcu_data_write  => s_mcu_data_write_cu,
+        i_mcu_data_read   => s_mcu_data_read_from_mcu,
+
+        -- Connessioni ALU3
+        o_alu3_start      => s_alu3_start,
+        i_alu3_done       => s_alu3_done,
+        o_alu3_cn2_3      => s_alu3_cn2_3,
+        o_alu3_cn1_3      => s_alu3_cn1_3,
+        o_alu3_cp1_3      => s_alu3_cp1_3,
+        o_alu3_cp2_3      => s_alu3_cp2_3,
+        o_alu3_prev2      => s_alu3_prev2,
+        o_alu3_prev1      => s_alu3_prev1,
+        o_alu3_next1      => s_alu3_next1,
+        o_alu3_next2      => s_alu3_next2,
+        i_alu3_result     => s_alu3_result,
+
+        -- Connessioni ALU5
+        o_alu5_start      => s_alu5_start,
+        i_alu5_done       => s_alu5_done,
+        o_alu5_cn3_5      => s_alu5_cn3_5,
+        o_alu5_cn2_5      => s_alu5_cn2_5,
+        o_alu5_cn1_5      => s_alu5_cn1_5,
+        o_alu5_cp1_5      => s_alu5_cp1_5,
+        o_alu5_cp2_5      => s_alu5_cp2_5,
+        o_alu5_cp3_5      => s_alu5_cp3_5,
+        o_alu5_prev3      => s_alu5_prev3,
+        o_alu5_prev2      => s_alu5_prev2,
+        o_alu5_prev1      => s_alu5_prev1,
+        o_alu5_next1      => s_alu5_next1,
+        o_alu5_next2      => s_alu5_next2,
+        o_alu5_next3      => s_alu5_next3,
+        i_alu5_result     => s_alu5_result,
+
+        -- Connessioni CRU
+        o_cru_start       => s_cru_start,
+        i_cru_done        => s_cru_done,
+        i_cru_k           => s_cru_k,
+        i_cru_s           => s_cru_s,
+        i_cru_cn2_3       => s_cru_cn2_3,
+        i_cru_cn1_3       => s_cru_cn1_3,
+        i_cru_cp1_3       => s_cru_cp1_3,
+        i_cru_cp2_3       => s_cru_cp2_3,
+        i_cru_cn3_5       => s_cru_cn3_5,
+        i_cru_cn2_5       => s_cru_cn2_5,
+        i_cru_cn1_5       => s_cru_cn1_5,
+        i_cru_cp1_5       => s_cru_cp1_5,
+        i_cru_cp2_5       : in  signed(7 downto 0);
+        i_cru_cp3_5       : in  signed(7 downto 0);
+        i_cru_w1_addr     => s_cru_w1_addr,
+
+        -- Connessioni WRU
+        o_wru_start       => s_wru_start_cu,
+        i_wru_done        => s_wru_done,
+        o_wru_center_addr => s_wru_center_addr_cu,
+        o_wru_filter_order_s => s_wru_filter_order_s_cu,
+        i_wru_prev3       => s_wru_prev3_out,
+        i_wru_prev2       => s_wru_prev2_out,
+        i_wru_prev1       => s_wru_prev1_out,
+        i_wru_current_W   => s_wru_current_W_out,
+        i_wru_next1       => s_wru_next1_out,
+        i_wru_next2       => s_wru_next2_out,
+        i_wru_next3       => s_wru_next3_out
+    );
+
+    -- Logica per il Multiplexer della MCU
+    -- La MCU è uno slave. CU e WRU possono essere master della MCU.
+    -- Dobbiamo prioritizzare o permettere una coesistenza (es. non si accavallano mai le richieste).
+    -- Assumiamo che CU e WRU non richiedano la MCU contemporaneamente.
+    -- Se la CU sta scrivendo (write_flag = '1'), ha la priorità per indirizzo e dati da scrivere.
+    -- Se la WRU sta leggendo (write_flag = '0'), ha la priorità per indirizzo.
+
+    -- Priorità: Se la CU sta scrivendo, i suoi segnali hanno la priorità.
+    -- Altrimenti, se la WRU sta richiedendo, i suoi segnali hanno la priorità.
+    -- Se nessuno dei due sta richiedendo, i segnali sono a 0 (o valori di default).
+
+    process (s_mcu_start_cu, s_mcu_start_wru, s_mcu_write_flag_cu,
+             s_mcu_addr_cu, s_mcu_data_write_cu, s_mcu_addr_wru, s_mcu_write_flag_wru)
+    begin
+        s_mcu_start_final       <= '0';
+        s_mcu_addr_final        <= (others => '0');
+        s_mcu_write_flag_final  <= '0';
+        s_mcu_data_write_final  <= (others => '0'); -- Default, solo CU scrive
+
+        if s_mcu_start_cu = '1' then
+            s_mcu_start_final      <= '1';
+            s_mcu_addr_final       <= s_mcu_addr_cu;
+            s_mcu_write_flag_final <= s_mcu_write_flag_cu;
+            s_mcu_data_write_final <= s_mcu_data_write_cu;
+        elsif s_mcu_start_wru = '1' then
+            s_mcu_start_final      <= '1';
+            s_mcu_addr_final       <= s_mcu_addr_wru;
+            s_mcu_write_flag_final <= s_mcu_write_flag_wru; -- WRU imposta sempre a '0' per lettura
+            -- s_mcu_data_write_final rimane a (others => '0') perché WRU non scrive
+        end if;
+    end process;
+
+
+end architecture Structural;
+
