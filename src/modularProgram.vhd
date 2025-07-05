@@ -798,9 +798,9 @@ use ieee.numeric_std.all;
 -- orchestra tutte le interazioni tra i moduli
 entity CU is
     port (
-        i_clk      : in  std_logic;  -- Clock di sistema
-        i_rst      : in  std_logic;  -- Reset asincrono
-        i_start    : in  std_logic;  -- Segnale di avvio dal Top Module
+        i_clk       : in  std_logic;  -- Clock di sistema
+        i_rst       : in  std_logic;  -- Reset asincrono
+        i_start     : in  std_logic;  -- Segnale di avvio dal Top Module
         i_base_addr : in  std_logic_vector(15 downto 0); -- Indirizzo di partenza in memoria (dal Top Module)
 
         o_done     : out std_logic;  -- Segnale di completamento per il Top Module
@@ -1120,35 +1120,39 @@ use ieee.numeric_std.all;
 -- ----------------------------------------------------
 entity project_reti_logiche is
     port (
-        clk             : in  std_logic;  -- Clock di sistema
-        rst             : in  std_logic;  -- Reset asincrono
-        start_operation : in  std_logic;  -- Segnale di avvio esterno
-        base_address    : in  std_logic_vector(15 downto 0); -- Indirizzo base per la sequenza W (es. 0x0000)
-        operation_done  : out std_logic   -- Segnale di completamento esterno
+        i_clk      : in std_logic;
+        i_rst      : in std_logic;
+        i_start    : in std_logic;
+        i_add      : in std_logic_vector(15 downto 0); -- Rinominato per chiarezza, prima era 'base_address'
+
+        o_done     : out std_logic;
+
+        -- Interfaccia verso la MEMORIA ESTERNA (che prima era gestita dalla tua MCU interna)
+        o_mem_addr : out std_logic_vector(15 downto 0);
+        i_mem_data : in std_logic_vector(7 downto 0);
+        o_mem_data : out std_logic_vector(7 downto 0);
+        o_mem_we   : out std_logic; -- Write Enable (se '1' è scrittura, se '0' è lettura)
+        o_mem_en   : out std_logic  -- Memory Enable (attiva la comunicazione con la memoria)
     );
 end entity project_reti_logiche;
 
 architecture Structural of project_reti_logiche is
 
     -- Segnali interni per le interconnessioni tra i moduli
-    -- Segnali MCU
-    signal s_mcu_start_cu      : std_logic;
-    signal s_mcu_addr_cu       : std_logic_vector(15 downto 0);
-    signal s_mcu_write_flag_cu : std_logic;
-    signal s_mcu_data_write_cu : std_logic_vector(7 downto 0);
     
-    signal s_mcu_start_wru     : std_logic;
-    signal s_mcu_addr_wru      : std_logic_vector(15 downto 0);
-    signal s_mcu_write_flag_wru: std_logic; -- Sarà sempre '0' da WRU (solo letture)
-    
-    signal s_mcu_done_from_mcu : std_logic;
-    signal s_mcu_data_read_from_mcu : std_logic_vector(7 downto 0);
+    signal s_mcu_start_cu      : std_logic; -- Sarà mappato a o_mem_en
+    signal s_mcu_addr_cu       : std_logic_vector(15 downto 0); -- Sarà mappato a o_mem_addr
+    signal s_mcu_write_flag_cu : std_logic; -- Sarà mappato a o_mem_we
+    signal s_mcu_data_write_cu : std_logic_vector(7 downto 0); -- Sarà mappato a o_mem_data
 
-    -- Multiplexer per i segnali MCU: MCU è lo slave, CU e WRU sono master
-    signal s_mcu_start_final       : std_logic;
-    signal s_mcu_addr_final        : std_logic_vector(15 downto 0);
-    signal s_mcu_write_flag_final  : std_logic;
-    signal s_mcu_data_write_final  : std_logic_vector(7 downto 0);
+    signal s_mcu_start_wru     : std_logic; -- Sarà mappato a o_mem_en
+    signal s_mcu_addr_wru      : std_logic_vector(15 downto 0); -- Sarà mappato a o_mem_addr
+    signal s_mcu_write_flag_wru: std_logic; -- Sarà mappato a o_mem_we (sempre '0' per WRU)
+
+    -- Il segnale 'done' della memoria (prima 's_mcu_done_from_mcu') sarà l'ACK dalla memoria esterna
+    signal s_mem_done_ack      : std_logic;
+    signal s_mem_data_read     : std_logic_vector(7 downto 0); -- Data letto dalla memoria esterna
+
 
     -- Segnali CRU
     signal s_cru_start         : std_logic;
@@ -1209,21 +1213,6 @@ architecture Structural of project_reti_logiche is
     signal s_wru_next1_out     : signed(7 downto 0);
     signal s_wru_next2_out     : signed(7 downto 0);
     signal s_wru_next3_out     : signed(7 downto 0);
-
-
-    -- Componente MCU (Memory Controller Unit)
-    component MCU is
-        port (
-            i_clk             : in  std_logic;
-            i_rst             : in  std_logic;
-            i_start           : in  std_logic;                  -- Segnale di avvio da CU/WRU
-            i_addr            : in  std_logic_vector(15 downto 0); -- Indirizzo
-            i_write_flag      : in  std_logic;                  -- '1' per scrittura, '0' per lettura
-            i_data_to_write   : in  std_logic_vector(7 downto 0); -- Dato da scrivere
-            o_done            : out std_logic;                  -- Segnale di completamento
-            o_data_read       : out std_logic_vector(7 downto 0)  -- Dato letto
-        );
-    end component;
 
     -- Componente CRU (Configuration Reader Unit)
     component CRU is
@@ -1406,24 +1395,11 @@ begin
     -- Istanziazione dei Moduli
     -- -------------------------
 
-    -- Istanziazione della Memory Control Unit (MCU)
-    MCU_INST : MCU
-    port map (
-        i_clk             => clk,
-        i_rst             => rst,
-        i_start           => s_mcu_start_final,      -- Multiplexed start da CU o WRU
-        i_addr            => s_mcu_addr_final,         -- Multiplexed address da CU o WRU
-        i_write_flag      => s_mcu_write_flag_final,   -- Multiplexed write_flag da CU o WRU
-        i_data_to_write   => s_mcu_data_write_cu,      -- Solo CU scrive dati
-        o_done            => s_mcu_done_from_mcu,      -- MCU done per CU e WRU
-        o_data_read       => s_mcu_data_read_from_mcu  -- MCU data read per CU e WRU
-    );
-
     -- Istanziazione della Configuration Reader Unit (CRU)
     CRU_INST : CRU
     port map (
-        i_clk       => clk,
-        i_rst       => rst,
+        i_clk       => i_clk,
+        i_rst       => i_rst,
         i_start     => s_cru_start,
         o_done      => s_cru_done,
         o_k         => s_cru_k,
@@ -1444,31 +1420,31 @@ begin
     -- Istanziazione della Window Reader Unit (WRU)
     WRU_INST : Window_Reader_Unit
     port map (
-        i_clk             => clk,
-        i_rst             => rst,
-        i_start_wru       => s_wru_start_cu,           -- Start dalla CU
-        i_center_addr     => s_wru_center_addr_cu,     -- Indirizzo centrale dalla CU
-        i_filter_order_s  => s_wru_filter_order_s_cu,  -- Ordine del filtro dalla CU
-        o_prev3           => s_wru_prev3_out,          -- Output prev3 per CU
-        o_prev2           => s_wru_prev2_out,          -- Output prev2 per CU
-        o_prev1           => s_wru_prev1_out,          -- Output prev1 per CU
-        o_current_W       => s_wru_current_W_out,      -- Output current_W per CU
-        o_next1           => s_wru_next1_out,          -- Output next1 per CU
-        o_next2           => s_wru_next2_out,          -- Output next2 per CU
-        o_next3           => s_wru_next3_out,          -- Output next3 per CU
-        o_wru_done        => s_wru_done,               -- Done di WRU per CU
-        o_mcu_start_req   => s_mcu_start_wru,          -- Richiesta MCU da WRU
-        i_mcu_done_ack    => s_mcu_done_from_mcu,      -- Ack da MCU per WRU
-        o_mcu_addr_req    => s_mcu_addr_wru,           -- Indirizzo MCU da WRU
-        o_mcu_write_flag  => s_mcu_write_flag_wru,     -- Write_flag (sempre '0') da WRU
-        i_mcu_data_read   => s_mcu_data_read_from_mcu  -- Data letto da MCU per WRU
+        i_clk             => i_clk,
+        i_rst             => i_rst,
+        i_start_wru       => s_wru_start_cu,
+        i_center_addr     => s_wru_center_addr_cu,
+        i_filter_order_s  => s_wru_filter_order_s_cu,
+        o_prev3           => s_wru_prev3_out,
+        o_prev2           => s_wru_prev2_out,
+        o_prev1           => s_wru_prev1_out,
+        o_current_W       => s_wru_current_W_out,
+        o_next1           => s_wru_next1_out,
+        o_next2           => s_wru_next2_out,
+        o_next3           => s_wru_next3_out,
+        o_wru_done        => s_wru_done,
+        o_mcu_start_req   => s_mcu_start_wru,
+        i_mcu_done_ack    => s_mem_done_ack,
+        o_mcu_addr_req    => s_mcu_addr_wru,
+        o_mcu_write_flag  => s_mcu_write_flag_wru,
+        i_mcu_data_read   => s_mem_data_read
     );
 
     -- Istanziazione dell'ALU3
     ALU3_INST : ALU3
     port map (
-        i_clk       => clk,
-        i_rst       => rst,
+        i_clk       => i_clk,
+        i_rst       => i_rst,
         i_start     => s_alu3_start,
         o_done      => s_alu3_done,
         i_cn2       => s_alu3_cn2_3,
@@ -1485,8 +1461,8 @@ begin
     -- Istanziazione dell'ALU5
     ALU5_INST : ALU5
     port map (
-        i_clk       => clk,
-        i_rst       => rst,
+        i_clk       => i_clk,
+        i_rst       => i_rst,
         i_start     => s_alu5_start,
         o_done      => s_alu5_done,
         i_cn3       => s_alu5_cn3_5,
@@ -1507,19 +1483,19 @@ begin
     -- Istanziazione della Control Unit (CU)
     CU_INST : CU
     port map (
-        i_clk      => clk,
-        i_rst      => rst,
-        i_start    => start_operation,  -- Start esterno al CU
-        i_base_addr => base_address,    -- Indirizzo base esterno al CU
-        o_done     => operation_done,   -- Done del CU all'esterno
+        i_clk      => i_clk,
+        i_rst      => i_rst,
+        i_start    => i_start,      -- Start esterno al CU
+        i_base_addr => i_add, -- Indirizzo base esterno al CU
+        o_done     => o_done,      -- Done del CU all'esterno
 
-        -- Connessioni MCU (CU come master, ma multiplexate con WRU)
+        -- Connessioni MCU (CU come master, i suoi segnali andranno al multiplexer)
         o_mcu_start       => s_mcu_start_cu,
-        i_mcu_done        => s_mcu_done_from_mcu,
+        i_mcu_done        => s_mem_done_ack,     -- Done da memoria esterna
         o_mcu_addr        => s_mcu_addr_cu,
         o_mcu_write_flag  => s_mcu_write_flag_cu,
         o_mcu_data_write  => s_mcu_data_write_cu,
-        i_mcu_data_read   => s_mcu_data_read_from_mcu,
+        i_mcu_data_read   => s_mem_data_read,    -- Data letto da memoria esterna
 
         -- Connessioni ALU3
         o_alu3_start      => s_alu3_start,
@@ -1582,6 +1558,7 @@ begin
         i_wru_next3       => s_wru_next3_out
     );
 
+
     -- Logica per il Multiplexer della MCU
     -- La MCU è uno slave. CU e WRU possono essere master della MCU.
     -- Dobbiamo prioritizzare o permettere una coesistenza (es. non si accavallano mai le richieste).
@@ -1596,23 +1573,27 @@ begin
     process (s_mcu_start_cu, s_mcu_start_wru, s_mcu_write_flag_cu,
              s_mcu_addr_cu, s_mcu_data_write_cu, s_mcu_addr_wru, s_mcu_write_flag_wru)
     begin
-        s_mcu_start_final       <= '0';
-        s_mcu_addr_final        <= (others => '0');
-        s_mcu_write_flag_final  <= '0';
-        s_mcu_data_write_final  <= (others => '0'); -- Default, solo CU scrive
+        o_mem_en   <= '0'; -- Inizialmente disabilitata
+        o_mem_addr <= (others => '0');
+        o_mem_we   <= '0'; -- Default a lettura
+        o_mem_data <= (others => '0'); -- Default data da scrivere a 0
 
         if s_mcu_start_cu = '1' then
-            s_mcu_start_final      <= '1';
-            s_mcu_addr_final       <= s_mcu_addr_cu;
-            s_mcu_write_flag_final <= s_mcu_write_flag_cu;
-            s_mcu_data_write_final <= s_mcu_data_write_cu;
+            o_mem_en   <= '1';
+            o_mem_addr <= s_mcu_addr_cu;
+            o_mem_we   <= s_mcu_write_flag_cu;
+            o_mem_data <= s_mcu_data_write_cu;
         elsif s_mcu_start_wru = '1' then
-            s_mcu_start_final      <= '1';
-            s_mcu_addr_final       <= s_mcu_addr_wru;
-            s_mcu_write_flag_final <= s_mcu_write_flag_wru; -- WRU imposta sempre a '0' per lettura
-            -- s_mcu_data_write_final rimane a (others => '0') perché WRU non scrive
+            o_mem_en   <= '1';
+            o_mem_addr <= s_mcu_addr_wru;
+            o_mem_we   <= s_mcu_write_flag_wru; -- WRU imposta sempre a '0' per lettura
+            -- o_mem_data rimane a (others => '0') perché WRU non scrive
         end if;
     end process;
+
+     -- Collegamento del dato letto dalla memoria esterna
+    -- Il dato letto dalla memoria esterna (i_mem_data) viene passato ai moduli interni
+    s_mem_data_read <= i_mem_data;
 
 
 end architecture Structural;
