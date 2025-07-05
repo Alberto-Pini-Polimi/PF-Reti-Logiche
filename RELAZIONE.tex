@@ -205,36 +205,45 @@ Il modulo ha i seguenti segnali:
     \end{itemize}
     \item Uscite:
     \begin{itemize}
-        \item \textbf{DONE} (1 bit): indica la fine dell'elaborazione.
+        \item \texttt{o\_done} = \textbf{DONE} (1 bit): indica la fine dell'elaborazione al testbench.
     \end{itemize}
 \end{itemize}
 
 \noindent Il modulo segue la seguente sequenza operativa:
 \begin{enumerate}
     \item All'avvio \texttt{RESET=1} e \texttt{DONE=0}.
-    \item Quando \texttt{RESET} torna a \texttt{0}, il modulo attende che quando il \texttt{CLOCK} sale ad $1$ che \texttt{START} sia pari a $1$.
+    \item Quando \texttt{RESET} torna a \texttt{0}, il modulo attende che, quando il \texttt{CLOCK} sale ad $1$, \texttt{START} sia pari a $1$.
     \item Legge i dati da memoria, esegue il filtraggio e scrive i risultati.
-    \item Alla fine dell'elaborazione, alza \texttt{DONE=1}.
-    \item Il modulo attende che \texttt{START} torni a \texttt{0} prima di un nuovo ciclo.
-    \item Infine \texttt{DONE=0} per prepararsi al prossimo ciclo.
+    \item Alla fine dell'elaborazione, alza \texttt{DONE=1} per segnalare al testbench che il moduolo ha finito il suo lavoro.
+    \item Il modulo attende che \texttt{START} torni a \texttt{0} prima di una nuova fase di computazione.
+    \item Infine il modulo setta \texttt{DONE=0} per segnalare al testbench che è pronto a ricevere un nuovo \texttt{START=1}.
 \end{enumerate}
 
-\noindent Nota: Prima del primo START=1, il modulo deve aver ricevuto RESET=1. Dopo la prima
+In qualsiasi momento \texttt{RESET} può passare da $0 \to 1$ e, in modo asincrono (quindi indipendentemente dal segnale \texttt{i\_clk}), il componente deve essere in grado di:
+\begin{enumerate}
+    \item fermare l'esecuzione
+    \item ...
+\end{enumerate}
+
+\subsection{Lavorare con la Memoria}
 
 
 
-\section{Sezione Due}
-La seconda sezione della relazione, dove si possono presentare ulteriori analisi o risultati. Potremmo anche includere formule matematiche:
-$$ E=mc^2 $$
-Oppure inserire un'immagine (assicurati di avere un file `immagine.png` nella stessa cartella del file .tex):
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=0.8\textwidth]{example-image-a} % Sostituisci con il nome della tua immagine
-    \caption{Una didascalia per l'immagine.}
-    \label{fig:immagine}
-\end{figure}
+\section{Architettura del Componente}
+
+\subsection{Moduli}
+
+\subsubsection{Top Module}
+\subsubsection{altri moduli}
+
+\subsection{FSM se non lo facciamo modulare}
+
+\section{Testbench}
+
+\subsection{Risultati TB standard}
+\subsection{TB custom per edge cases...}
 
 \section{Conclusioni}
-In questa sezione riassumiamo i punti chiave della relazione e presentiamo le conclusioni. Si possono anche suggerire lavori futuri o ulteriori ricerche.
+
 
 \end{document}
