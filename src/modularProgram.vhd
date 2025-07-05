@@ -148,7 +148,7 @@ entity ALU3 is
         i_next2 : in signed(7 downto 0);
 
         o_done_alu3 : out std_logic;
-        o_result_alu3 : out signed(7 downto 0);
+        o_result_alu3 : out signed(7 downto 0)
     );
 end entity ALU3;
 architecture Behavioral of ALU3 is
@@ -246,7 +246,7 @@ entity ALU5 is
         i_next3 : in signed(7 downto 0);
 
         o_done_alu5 : out std_logic;
-        o_result_alu5 : out signed(7 downto 0);
+        o_result_alu5 : out signed(7 downto 0)
     );
 end entity ALU5;
 architecture Behavioral of ALU5 is
@@ -1095,193 +1095,6 @@ end architecture Behavioral;
 
 
 
--- Componente MCU (Memory Controller Unit)
-component MCU is
-    port (
-        i_clk             : in  std_logic;
-        i_rst             : in  std_logic;
-        i_start           : in  std_logic;                  -- Segnale di avvio da CU/WRU
-        i_addr            : in  std_logic_vector(15 downto 0); -- Indirizzo
-        i_write_flag      : in  std_logic;                  -- '1' per scrittura, '0' per lettura
-        i_data_to_write   : in  std_logic_vector(7 downto 0); -- Dato da scrivere
-        o_done            : out std_logic;                  -- Segnale di completamento
-        o_data_read       : out std_logic_vector(7 downto 0)  -- Dato letto
-    );
-end component;
-
--- Componente CRU (Configuration Reader Unit)
-component CRU is
-    port (
-        i_clk       : in  std_logic;
-        i_rst       : in  std_logic;
-        i_start     : in  std_logic;
-        o_done      : out std_logic;
-        o_k         : out std_logic_vector(15 downto 0);    -- Lunghezza della sequenza W
-        o_s         : out std_logic;                      -- Ordine del filtro ('0' per 3, '1' per 5)
-        o_cn2_3     : out signed(7 downto 0);
-        o_cn1_3     : out signed(7 downto 0);
-        o_cp1_3     : out signed(7 downto 0);
-        o_cp2_3     : out signed(7 downto 0);
-        o_cn3_5     : out signed(7 downto 0);
-        o_cn2_5     : out signed(7 downto 0);
-        o_cn1_5     : out signed(7 downto 0);
-        o_cp1_5     : out signed(7 downto 0);
-        o_cp2_5     : out signed(7 downto 0);
-        o_cp3_5     : out signed(7 downto 0);
-        o_w1_addr   : out std_logic_vector(15 downto 0)   -- Indirizzo di partenza per la sequenza W
-    );
-end component;
-
--- Componente ALU3 (Arithmetic Logic Unit per Ordine 3)
-component ALU3 is
-    port (
-        i_clk       : in  std_logic;
-        i_rst       : in  std_logic;
-        i_start     : in  std_logic;
-        o_done      : out std_logic;
-        i_cn2       : in  signed(7 downto 0);
-        i_cn1       : in  signed(7 downto 0);
-        i_cp1       : in  signed(7 downto 0);
-        i_cp2       : in  signed(7 downto 0);
-        i_prev2     : in  signed(7 downto 0);
-        i_prev1     : in  signed(7 downto 0);
-        i_next1     : in  signed(7 downto 0);
-        i_next2     : in  signed(7 downto 0);
-        o_result    : out signed(7 downto 0)
-    );
-end component;
-
--- Componente ALU5 (Arithmetic Logic Unit per Ordine 5)
-component ALU5 is
-    port (
-        i_clk       : in  std_logic;
-        i_rst       : in  std_logic;
-        i_start     : in  std_logic;
-        o_done      : out std_logic;
-        i_cn3       : in  signed(7 downto 0);
-        i_cn2       : in  signed(7 downto 0);
-        i_cn1       : in  signed(7 downto 0);
-        i_cp1       : in  signed(7 downto 0);
-        i_cp2       : in  signed(7 downto 0);
-        i_cp3       : in  signed(7 downto 0);
-        i_prev3     : in  signed(7 downto 0);
-        i_prev2     : in  signed(7 downto 0);
-        i_prev1     : in  signed(7 downto 0);
-        i_next1     : in  signed(7 downto 0);
-        i_next2     : in  signed(7 downto 0);
-        i_next3     : in  signed(7 downto 0);
-        o_result    : out signed(7 downto 0)
-    );
-end component;
-
--- Componente Window_Reader_Unit (WRU)
-component Window_Reader_Unit is
-    port (
-        i_clk             : in  std_logic;
-        i_rst             : in  std_logic;
-        i_start_wru       : in  std_logic;                  -- Avvia la lettura della finestra
-        i_center_addr     : in  std_logic_vector(15 downto 0); -- L'indirizzo del valore centrale (W(i))
-        i_filter_order_s  : in  std_logic;                  -- '0' per ordine 3, '1' per ordine 5
-
-        -- Output dei dati della finestra
-        o_prev3           : out signed(7 downto 0);
-        o_prev2           : out signed(7 downto 0);
-        o_prev1           : out signed(7 downto 0);
-        o_current_W       : out signed(7 downto 0);
-        o_next1           : out signed(7 downto 0);
-        o_next2           : out signed(7 downto 0);
-        o_next3           : out signed(7 downto 0);
-
-        o_wru_done        : out std_logic;                  -- Segnale di completamento lettura finestra
-
-        -- Interfaccia con MCU (WRU è il master, MCU è lo slave)
-        o_mcu_start_req   : out std_logic;
-        i_mcu_done_ack    : in  std_logic;
-        o_mcu_addr_req    : out std_logic_vector(15 downto 0);
-        o_mcu_write_flag  : out std_logic;
-        i_mcu_data_read   : in  std_logic_vector(7 downto 0)
-    );
-end component;
-
--- Componente CU (Control Unit)
-component CU is
-    port (
-        i_clk      : in  std_logic;
-        i_rst      : in  std_logic;
-        i_start    : in  std_logic;
-        i_base_addr : in  std_logic_vector(15 downto 0);
-
-        o_done     : out std_logic;
-
-        -- Interfaccia con MCU (CU è il master, WRU è lo slave per le letture della finestra)
-        o_mcu_start       : out std_logic;
-        i_mcu_done        : in  std_logic;
-        o_mcu_addr        : out std_logic_vector(15 downto 0);
-        o_mcu_write_flag  : out std_logic;
-        o_mcu_data_write  : out std_logic_vector(7 downto 0);
-        i_mcu_data_read   : in  std_logic_vector(7 downto 0);
-
-        -- Interfaccia con ALU3
-        o_alu3_start      : out std_logic;
-        i_alu3_done       : in  std_logic;
-        o_alu3_cn2_3      : out signed(7 downto 0);
-        o_alu3_cn1_3      : out signed(7 downto 0);
-        o_alu3_cp1_3      : out signed(7 downto 0);
-        o_alu3_cp2_3      : out signed(7 downto 0);
-        o_alu3_prev2      : out signed(7 downto 0);
-        o_alu3_prev1      : out signed(7 downto 0);
-        o_alu3_next1      : out signed(7 downto 0);
-        o_alu3_next2      : out signed(7 downto 0);
-        i_alu3_result     : in  signed(7 downto 0);
-
-        -- Interfaccia con ALU5
-        o_alu5_start      : out std_logic;
-        i_alu5_done       : in  std_logic;
-        o_alu5_cn3_5      : out signed(7 downto 0);
-        o_alu5_cn2_5      : out signed(7 downto 0);
-        o_alu5_cn1_5      : out signed(7 downto 0);
-        o_alu5_cp1_5      : out signed(7 downto 0);
-        o_alu5_cp2_5      : out signed(7 downto 0);
-        o_alu5_cp3_5      : out signed(7 downto 0);
-        o_alu5_prev3      : out signed(7 downto 0);
-        o_alu5_prev2      : out signed(7 downto 0);
-        o_alu5_prev1      : out signed(7 downto 0);
-        o_alu5_next1      : out signed(7 downto 0);
-        o_alu5_next2      : out signed(7 downto 0);
-        o_alu5_next3      : out signed(7 downto 0);
-        i_alu5_result     : in  signed(7 downto 0);
-
-        -- Interfaccia con CRU
-        o_cru_start       : out std_logic;
-        i_cru_done        : in  std_logic;
-        i_cru_k           : in  std_logic_vector(15 downto 0);
-        i_cru_s           : in  std_logic;
-        i_cru_cn2_3       : in  signed(7 downto 0);
-        i_cru_cn1_3       : in  signed(7 downto 0);
-        i_cru_cp1_3       : in  signed(7 downto 0);
-        i_cru_cp2_3       : in  signed(7 downto 0);
-        i_cru_cn3_5       : in  signed(7 downto 0);
-        i_cru_cn2_5       : in  signed(7 downto 0);
-        i_cru_cn1_5       : in  signed(7 downto 0);
-        i_cru_cp1_5       : in  signed(7 downto 0);
-        i_cru_cp2_5       : in  signed(7 downto 0);
-        i_cru_cp3_5       : in  signed(7 downto 0);
-        i_cru_w1_addr     : in  std_logic_vector(15 downto 0);
-
-        -- Interfaccia con WRU
-        o_wru_start       : out std_logic;
-        i_wru_done        : in  std_logic;
-        o_wru_center_addr : out std_logic_vector(15 downto 0);
-        o_wru_filter_order_s : out std_logic;
-        i_wru_prev3       : in  signed(7 downto 0);
-        i_wru_prev2       : in  signed(7 downto 0);
-        i_wru_prev1       : in  signed(7 downto 0);
-        i_wru_current_W   : in  signed(7 downto 0);
-        i_wru_next1       : in  signed(7 downto 0);
-        i_wru_next2       : in  signed(7 downto 0);
-        i_wru_next3       : in  signed(7 downto 0)
-    );
-end component;
 
 -- Top Module con stessa interfaccia del modulo monolitico originale
 -- ----------------------------------------------------
@@ -1376,6 +1189,197 @@ architecture Structural of top_module is
     signal s_wru_next1_out     : signed(7 downto 0);
     signal s_wru_next2_out     : signed(7 downto 0);
     signal s_wru_next3_out     : signed(7 downto 0);
+
+
+    -- Componente MCU (Memory Controller Unit)
+    component MCU is
+        port (
+            i_clk             : in  std_logic;
+            i_rst             : in  std_logic;
+            i_start           : in  std_logic;                  -- Segnale di avvio da CU/WRU
+            i_addr            : in  std_logic_vector(15 downto 0); -- Indirizzo
+            i_write_flag      : in  std_logic;                  -- '1' per scrittura, '0' per lettura
+            i_data_to_write   : in  std_logic_vector(7 downto 0); -- Dato da scrivere
+            o_done            : out std_logic;                  -- Segnale di completamento
+            o_data_read       : out std_logic_vector(7 downto 0)  -- Dato letto
+        );
+    end component;
+
+    -- Componente CRU (Configuration Reader Unit)
+    component CRU is
+        port (
+            i_clk       : in  std_logic;
+            i_rst       : in  std_logic;
+            i_start     : in  std_logic;
+            o_done      : out std_logic;
+            o_k         : out std_logic_vector(15 downto 0);    -- Lunghezza della sequenza W
+            o_s         : out std_logic;                      -- Ordine del filtro ('0' per 3, '1' per 5)
+            o_cn2_3     : out signed(7 downto 0);
+            o_cn1_3     : out signed(7 downto 0);
+            o_cp1_3     : out signed(7 downto 0);
+            o_cp2_3     : out signed(7 downto 0);
+            o_cn3_5     : out signed(7 downto 0);
+            o_cn2_5     : out signed(7 downto 0);
+            o_cn1_5     : out signed(7 downto 0);
+            o_cp1_5     : out signed(7 downto 0);
+            o_cp2_5     : out signed(7 downto 0);
+            o_cp3_5     : out signed(7 downto 0);
+            o_w1_addr   : out std_logic_vector(15 downto 0)   -- Indirizzo di partenza per la sequenza W
+        );
+    end component;
+
+    -- Componente ALU3 (Arithmetic Logic Unit per Ordine 3)
+    component ALU3 is
+        port (
+            i_clk       : in  std_logic;
+            i_rst       : in  std_logic;
+            i_start     : in  std_logic;
+            o_done      : out std_logic;
+            i_cn2       : in  signed(7 downto 0);
+            i_cn1       : in  signed(7 downto 0);
+            i_cp1       : in  signed(7 downto 0);
+            i_cp2       : in  signed(7 downto 0);
+            i_prev2     : in  signed(7 downto 0);
+            i_prev1     : in  signed(7 downto 0);
+            i_next1     : in  signed(7 downto 0);
+            i_next2     : in  signed(7 downto 0);
+            o_result    : out signed(7 downto 0)
+        );
+    end component;
+
+    -- Componente ALU5 (Arithmetic Logic Unit per Ordine 5)
+    component ALU5 is
+        port (
+            i_clk       : in  std_logic;
+            i_rst       : in  std_logic;
+            i_start     : in  std_logic;
+            o_done      : out std_logic;
+            i_cn3       : in  signed(7 downto 0);
+            i_cn2       : in  signed(7 downto 0);
+            i_cn1       : in  signed(7 downto 0);
+            i_cp1       : in  signed(7 downto 0);
+            i_cp2       : in  signed(7 downto 0);
+            i_cp3       : in  signed(7 downto 0);
+            i_prev3     : in  signed(7 downto 0);
+            i_prev2     : in  signed(7 downto 0);
+            i_prev1     : in  signed(7 downto 0);
+            i_next1     : in  signed(7 downto 0);
+            i_next2     : in  signed(7 downto 0);
+            i_next3     : in  signed(7 downto 0);
+            o_result    : out signed(7 downto 0)
+        );
+    end component;
+
+    -- Componente Window_Reader_Unit (WRU)
+    component Window_Reader_Unit is
+        port (
+            i_clk             : in  std_logic;
+            i_rst             : in  std_logic;
+            i_start_wru       : in  std_logic;                  -- Avvia la lettura della finestra
+            i_center_addr     : in  std_logic_vector(15 downto 0); -- L'indirizzo del valore centrale (W(i))
+            i_filter_order_s  : in  std_logic;                  -- '0' per ordine 3, '1' per ordine 5
+
+            -- Output dei dati della finestra
+            o_prev3           : out signed(7 downto 0);
+            o_prev2           : out signed(7 downto 0);
+            o_prev1           : out signed(7 downto 0);
+            o_current_W       : out signed(7 downto 0);
+            o_next1           : out signed(7 downto 0);
+            o_next2           : out signed(7 downto 0);
+            o_next3           : out signed(7 downto 0);
+
+            o_wru_done        : out std_logic;                  -- Segnale di completamento lettura finestra
+
+            -- Interfaccia con MCU (WRU è il master, MCU è lo slave)
+            o_mcu_start_req   : out std_logic;
+            i_mcu_done_ack    : in  std_logic;
+            o_mcu_addr_req    : out std_logic_vector(15 downto 0);
+            o_mcu_write_flag  : out std_logic;
+            i_mcu_data_read   : in  std_logic_vector(7 downto 0)
+        );
+    end component;
+
+    -- Componente CU (Control Unit)
+    component CU is
+        port (
+            i_clk      : in  std_logic;
+            i_rst      : in  std_logic;
+            i_start    : in  std_logic;
+            i_base_addr : in  std_logic_vector(15 downto 0);
+
+            o_done     : out std_logic;
+
+            -- Interfaccia con MCU (CU è il master, WRU è lo slave per le letture della finestra)
+            o_mcu_start       : out std_logic;
+            i_mcu_done        : in  std_logic;
+            o_mcu_addr        : out std_logic_vector(15 downto 0);
+            o_mcu_write_flag  : out std_logic;
+            o_mcu_data_write  : out std_logic_vector(7 downto 0);
+            i_mcu_data_read   : in  std_logic_vector(7 downto 0);
+
+            -- Interfaccia con ALU3
+            o_alu3_start      : out std_logic;
+            i_alu3_done       : in  std_logic;
+            o_alu3_cn2_3      : out signed(7 downto 0);
+            o_alu3_cn1_3      : out signed(7 downto 0);
+            o_alu3_cp1_3      : out signed(7 downto 0);
+            o_alu3_cp2_3      : out signed(7 downto 0);
+            o_alu3_prev2      : out signed(7 downto 0);
+            o_alu3_prev1      : out signed(7 downto 0);
+            o_alu3_next1      : out signed(7 downto 0);
+            o_alu3_next2      : out signed(7 downto 0);
+            i_alu3_result     : in  signed(7 downto 0);
+
+            -- Interfaccia con ALU5
+            o_alu5_start      : out std_logic;
+            i_alu5_done       : in  std_logic;
+            o_alu5_cn3_5      : out signed(7 downto 0);
+            o_alu5_cn2_5      : out signed(7 downto 0);
+            o_alu5_cn1_5      : out signed(7 downto 0);
+            o_alu5_cp1_5      : out signed(7 downto 0);
+            o_alu5_cp2_5      : out signed(7 downto 0);
+            o_alu5_cp3_5      : out signed(7 downto 0);
+            o_alu5_prev3      : out signed(7 downto 0);
+            o_alu5_prev2      : out signed(7 downto 0);
+            o_alu5_prev1      : out signed(7 downto 0);
+            o_alu5_next1      : out signed(7 downto 0);
+            o_alu5_next2      : out signed(7 downto 0);
+            o_alu5_next3      : out signed(7 downto 0);
+            i_alu5_result     : in  signed(7 downto 0);
+
+            -- Interfaccia con CRU
+            o_cru_start       : out std_logic;
+            i_cru_done        : in  std_logic;
+            i_cru_k           : in  std_logic_vector(15 downto 0);
+            i_cru_s           : in  std_logic;
+            i_cru_cn2_3       : in  signed(7 downto 0);
+            i_cru_cn1_3       : in  signed(7 downto 0);
+            i_cru_cp1_3       : in  signed(7 downto 0);
+            i_cru_cp2_3       : in  signed(7 downto 0);
+            i_cru_cn3_5       : in  signed(7 downto 0);
+            i_cru_cn2_5       : in  signed(7 downto 0);
+            i_cru_cn1_5       : in  signed(7 downto 0);
+            i_cru_cp1_5       : in  signed(7 downto 0);
+            i_cru_cp2_5       : in  signed(7 downto 0);
+            i_cru_cp3_5       : in  signed(7 downto 0);
+            i_cru_w1_addr     : in  std_logic_vector(15 downto 0);
+
+            -- Interfaccia con WRU
+            o_wru_start       : out std_logic;
+            i_wru_done        : in  std_logic;
+            o_wru_center_addr : out std_logic_vector(15 downto 0);
+            o_wru_filter_order_s : out std_logic;
+            i_wru_prev3       : in  signed(7 downto 0);
+            i_wru_prev2       : in  signed(7 downto 0);
+            i_wru_prev1       : in  signed(7 downto 0);
+            i_wru_current_W   : in  signed(7 downto 0);
+            i_wru_next1       : in  signed(7 downto 0);
+            i_wru_next2       : in  signed(7 downto 0);
+            i_wru_next3       : in  signed(7 downto 0)
+        );
+    end component;
+
+
 
 begin
 
@@ -1592,4 +1596,3 @@ begin
 
 
 end architecture Structural;
-
