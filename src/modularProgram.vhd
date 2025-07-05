@@ -2,8 +2,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-
-
 -- Modulo di Memory Control Unit (MCU)
 -- ----------------------------------------------------
 entity MCU is
@@ -129,6 +127,10 @@ begin
 end architecture Behavioral;
 
 
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
 -- Modulo di Arithmetic Logic Unit for order 3 (ALU3)
 -- ----------------------------------------------------
 entity ALU3 is
@@ -188,10 +190,10 @@ begin
                 -- Esegui i calcoli solo quando il segnale di start è attivo
         
                 -- moltiplicazioni
-                tmp_n2 := resize(c_n2_3, 16) * resize(prev2, 16);
-                tmp_n1 := resize(c_n1_3, 16) * resize(prev1, 16);
-                tmp_p1 := resize(c_p1_3, 16) * resize(next1, 16);
-                tmp_p2 := resize(c_p2_3, 16) * resize(next2, 16);
+                tmp_n2 := resize(i_cn2_3, 16) * resize(i_prev2, 16);
+                tmp_n1 := resize(i_cn1_3, 16) * resize(i_prev1, 16);
+                tmp_p1 := resize(i_cp1_3, 16) * resize(i_next1, 16);
+                tmp_p2 := resize(i_cp2_3, 16) * resize(i_next2, 16);
                 -- somma
                 tmp_sum := tmp_n2 + tmp_n1 + tmp_p1 + tmp_p2;
                 --divisione
@@ -207,7 +209,7 @@ begin
                 elsif tmp_res < to_signed(-128, 32) then
                     s_result_alu3_reg <= "10000000";
                 else
-                    s_result_alu3_reg <= std_logic_vector(resize(tmp_res, 8));
+                    s_result_alu3_reg <= signed(resize(tmp_res, 8));
                 end if;
 
                 -- lancio il segnale di fine
@@ -222,6 +224,10 @@ begin
     
 end architecture Behavioral;
 
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 -- Modulo di Arithmetic Logic Unit for order 5 (ALU5)
 -- ----------------------------------------------------
@@ -286,12 +292,12 @@ begin
                 -- Esegui i calcoli solo quando il segnale di start è attivo
         
                 -- moltiplicazioni
-                tmp_n3 := resize(c_n3_5, 16) * resize(prev3, 16);
-                tmp_n2 := resize(c_n2_3, 16) * resize(prev2, 16);
-                tmp_n1 := resize(c_n1_3, 16) * resize(prev1, 16);
-                tmp_p1 := resize(c_p1_3, 16) * resize(next1, 16);
-                tmp_p2 := resize(c_p2_3, 16) * resize(next2, 16);
-                tmp_p3 := resize(c_p3_5, 16) * resize(next3, 16);
+                tmp_n3 := resize(i_cn3_5, 16) * resize(i_prev3, 16);
+                tmp_n2 := resize(i_cn2_5, 16) * resize(i_prev2, 16);
+                tmp_n1 := resize(i_cn1_5, 16) * resize(i_prev1, 16);
+                tmp_p1 := resize(i_cp1_5, 16) * resize(i_next1, 16);
+                tmp_p2 := resize(i_cp2_5, 16) * resize(i_next2, 16);
+                tmp_p3 := resize(i_cp3_5, 16) * resize(i_next3, 16);
                 -- somma
                 tmp_sum := tmp_n3 + tmp_n2 + tmp_n1 + tmp_p1 + tmp_p2 + tmp_p3;
                 --divisione
@@ -307,7 +313,7 @@ begin
                 elsif tmp_res < to_signed(-128, 32) then
                     s_result_alu5_reg <= "10000000";
                 else
-                    s_result_alu5_reg <= std_logic_vector(resize(tmp_res, 8));
+                    s_result_alu5_reg <= signed(resize(tmp_res, 8));
                 end if;
 
                 -- lancio il segnale di fine
@@ -324,7 +330,9 @@ end architecture Behavioral;
 
 
 
-
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 -- Modulo di Config Reader Unit (CRU) per la lettura di s, k e dei coefficienti
 -- ----------------------------------------------------
@@ -367,6 +375,11 @@ architecture Behavioral of CRU is
         CONFIG_DONE
     );
     signal current_state : state_type := IDLE;
+
+    type coeffs_array_3 is array (0 to 3) of signed(7 downto 0);
+    type coeffs_array_5 is array (0 to 5) of signed(7 downto 0);
+    signal s_coeffs_3 : coeffs_array_3 := (others => to_signed(0,8));
+    signal s_coeffs_5 : coeffs_array_5 := (others => to_signed(0,8));
 
     -- Registri interni
     signal s_k1 : std_logic_vector(7 downto 0) := (others => '0');
@@ -563,6 +576,9 @@ end architecture Behavioral;
 
 
 
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 -- Modulo di Window Reader Unit (WRU)
 -- ----------------------------------------------------
@@ -773,7 +789,9 @@ end architecture Behavioral;
 
 
 
-
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 -- Modulo Control Unit (CU)
 -- ------------------------------------------------
@@ -1063,7 +1081,7 @@ begin
     o_mcu_addr <= s_mcu_addr_reg;
     o_mcu_write_flag <= s_mcu_write_flag_reg;
     o_mcu_data_write <= s_mcu_data_write_reg;
-    i_mcu_data_read <= i_mcu_data_read; -- Pass-through per il dato letto da MCU verso il CU
+    --i_mcu_data_read <= i_mcu_data_read; -- Pass-through per il dato letto da MCU verso il CU
 
     o_alu3_start <= s_alu3_start_reg;
     o_alu3_cn2_3 <= s_c_n2_3_val; o_alu3_cn1_3 <= s_c_n1_3_val;
@@ -1094,11 +1112,13 @@ end architecture Behavioral;
 
 
 
-
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 -- Top Module con stessa interfaccia del modulo monolitico originale
 -- ----------------------------------------------------
-entity top_module is
+entity project_reti_logiche is
     port (
         clk             : in  std_logic;  -- Clock di sistema
         rst             : in  std_logic;  -- Reset asincrono
@@ -1106,9 +1126,9 @@ entity top_module is
         base_address    : in  std_logic_vector(15 downto 0); -- Indirizzo base per la sequenza W (es. 0x0000)
         operation_done  : out std_logic   -- Segnale di completamento esterno
     );
-end entity top_module;
+end entity project_reti_logiche;
 
-architecture Structural of top_module is
+architecture Structural of project_reti_logiche is
 
     -- Segnali interni per le interconnessioni tra i moduli
     -- Segnali MCU
