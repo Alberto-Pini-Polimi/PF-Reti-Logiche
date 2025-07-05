@@ -1,0 +1,240 @@
+\documentclass{article}
+
+% --- Pacchetti utili ---
+\usepackage{listings}
+\usepackage{xcolor} % Per definire colori personalizzati se vuoi
+\usepackage[utf8]{inputenc} % Codifica del testo
+\usepackage[italian]{babel}   % Lingua italiana
+\usepackage{amsmath}        % Per equazioni matematiche (se necessarie)
+\usepackage{graphicx}       % Per includere immagini (se necessarie)
+\usepackage{geometry}       % Per gestire i margini della pagina
+\geometry{a4paper, total={16cm,24cm}, left=2.5cm, top=2.5cm} % Esempio di impostazione margini
+
+% --- Configurazione per VHDL con listings ---
+\lstset{
+    language=VHDL,                % Specifica il linguaggio come VHDL
+    basicstyle=\ttfamily\small,   % Stile del testo: font monospaced e dimensione piccola
+    numbers=left,                 % Numera le righe a sinistra
+    numberstyle=\tiny\color{gray}, % Stile dei numeri di riga
+    frame=single,                 % Aggiunge una cornice attorno al blocco di codice
+    framesep=5pt,                 % Spazio tra cornice e codice
+    framerule=0.5pt,              % Spessore della cornice
+    rulecolor=\color{black},      % Colore della cornice
+    showstringspaces=false,       % Non mostrare spazi nelle stringhe
+    tabsize=2,                    % Dimensione del tab
+    breaklines=true,              % Permette di spezzare righe lunghe
+    captionpos=b,                 % Posizione della didascalia (b=bottom, t=top)
+    keywordstyle=\color{blue}\bfseries, % Colore e stile per le parole chiave
+    identifierstyle=\color{black},      % Stile per gli identificatori
+    commentstyle=\color{green!50!black}, % Colore per i commenti
+    stringstyle=\color{orange!70!black}, % Colore per le stringhe
+    literate={_}{{\_}}1,          % Permette l'underscore nel codice VHDL
+    morekeywords={entity, is, port, end, architecture, behavioral, signal, std_logic, std_logic_vector, in, out, process, begin, if, else, elsif, then, end, loop, variable, constant} % Aggiungi altre parole chiave VHDL se necessario
+}
+
+% --- Personalizzazione della pagina del titolo ---
+% Ridefiniamo il comando \maketitle per avere più controllo sullo stile
+\makeatletter
+\renewcommand{\maketitle}{%
+  \begin{titlepage}%
+    \centering%
+    \vspace*{2cm}% Spazio dall'alto della pagina
+    {\fontsize{28}{30}\selectfont \bfseries \@title \par}% Titolo più grande e in grassetto
+    \vspace{1.5cm}% Spazio tra titolo e autore
+    {\fontsize{18}{20}\selectfont \@author \par}% Autore più grande
+    \vspace{1cm}% Spazio tra autore e data
+    {\fontsize{14}{16}\selectfont \@date \par}% Data più grande
+    \vfill% Riempie lo spazio rimanente per centrare verticalmente
+    % Puoi aggiungere qui un logo o altre informazioni se necessario
+    \vspace*{2cm}% Spazio dal basso della pagina
+  \end{titlepage}%
+}
+\makeatother
+
+% --- Informazioni del documento ---
+\title{\Huge Prova Finale di Reti Logiche \\ \Large Anno 2024/2025}
+\author{Alberto Pini e Davide Redaelli\\(212524 - ?)}
+\date{\today} % O puoi specificare una data fissa, es: \date{5 Luglio 2025}
+
+\begin{document}
+
+% --- Pagina del titolo ---
+\maketitle
+\thispagestyle{empty} % Non mostra il numero di pagina sulla pagina del titolo
+
+\newpage % Forza una nuova pagina
+
+% --- Sommario ---
+\tableofcontents
+\thispagestyle{plain} % Mostra il numero di pagina sul sommario
+
+\newpage % Forza una nuova pagina
+
+% --- Contenuto della relazione ---
+
+
+
+
+
+
+\section{Introduzione}
+Programmare FPGA, VHDL ecc...
+
+\section{Analisi Specifica}
+L'FPGA da programmare lavora con una memoria costituita da metadati iniziali e una sequenza di $K$ parole, ciascuna referenziata con $W_i$. Il Chip dovrà "iterare" la memoria mentre calcola e scrive i risultati.
+
+\subsection{Interfaccia del Componente}
+
+Diagramma delle porte
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{resources/fpga.png} % Sostituisci con il nome della tua immagine
+    \caption{Diagramma delle porte}
+    \label{fig:png}
+\end{figure}
+\noindent Notare che nel contesto di development sia \texttt{INPUT} che \texttt{OUTPUT} che \texttt{MEMORIA} fanno tutti parte di un unico chip non sintetizzabile che corrisponde al Testbench.
+
+\begin{figure}[h!]
+    \centering
+    \begin{lstlisting}[caption=In \texttt{VHDL} l'entità componente viene definita in questo modo, label=lst:entity_vhdl]
+entity project_reti_logiche is
+    port (
+        i_clk      : in std_logic;
+        i_rst      : in std_logic;
+        i_start    : in std_logic;
+        i_add      : in std_logic_vector(15 downto 0);
+        o_done     : out std_logic;
+        o_mem_addr : out std_logic_vector(15 downto 0);
+        i_mem_data : in std_logic_vector(7 downto 0);
+        o_mem_data : out std_logic_vector(7 downto 0);
+        o_mem_we   : out std_logic;
+        o_mem_en   : out std_logic
+    );
+end project_reti_logiche;
+    \end{lstlisting}
+\end{figure}
+
+\noindent Descrizione delle porte del componente:
+
+\begin{itemize}
+    \item \texttt{i\_clk} clock di sistema
+    \item \texttt{i\_rst} segnale di reset asincrono
+    \item \texttt{i\_start} segnale che indica la fine della scrittura in memoria degli input da parte del testbench e, conseguentemente, la possibilità di iniziare il calcolo da parte del chip
+    \item \texttt{i\_add} $[15-0]$ address della memoria da cui leggere il primo bit
+    \item \texttt{o\_done} segnale da alzare una volta che si è finito di scrivere l'ultimo risultato
+\end{itemize}
+
+Le altre porte sono per la lettura e scrittura della memoria
+
+\begin{itemize}
+    \item \texttt{o\_mem\_en} segnale per attivare la memoria in lettura e potenzialmente anche in lettura
+    \item \texttt{o\_mem\_we} segnale per attivare la modalità di lettura della memoria
+    \item \texttt{o\_mem\_addr} $[15-0]$ address della memoria su cui il chip vuole lavorare (sia in lettura che scrittura)
+    \item \texttt{i\_mem\_data} $[7-0]$ segnale fornito dal chip alla memoria per memorizzare il valore in \texttt{o\_mem\_addr} (con $\texttt{o\_mem\_we} = \texttt{o\_mem\_en} = 1$)
+    \item \texttt{o\_mem\_data} $[7-0]$ segnale fornito al chip dalla memoria corrispondente al valore risultante della precedente lettura (con $\texttt{o\_mem\_we} = 0$ e $\texttt{o\_mem\_en} = 1$)
+\end{itemize}
+
+\subsection{Struttura Memoria}
+
+Tutti i dati da utilizzare sono memorizzati sequenzialmente a partire da un indirizzo specificato
+(ADD). I dati iniziali comprendono:
+\begin{itemize}
+    \item \textbf{17 byte} che indicano la lunghezza della sequenza, l'ordine del filtro differenziale e i coefficienti.
+    \begin{itemize}
+        \item \textbf{K1} e \textbf{K2}: due byte che indicano la lunghezza della sequenza K dei dati di W (\texttt{K1} è il byte più significativo, lunghezza minima = 7 byte).
+        \item \textbf{S}: un byte che indica quale filtro selezionare tra ordine 3 e ordine 5 (bit meno significativo: 0 $\rightarrow$ ordine 3, 1 $\rightarrow$ ordine 5).
+        \item Da \textbf{C1} a \textbf{C14}: $14$ byte contenenti i coefficienti dei filtri. Per esempio
+        \begin{itemize}
+            \item Ordine 3: c=[\texttt{0, -1, 8, 0, -8, 1, 0}], normalizzazione $n=12$.
+            \item Ordine 5: c=[\texttt{1, -9, 45, 0, -45, 9, -1}], normalizzazione $n=60$.
+        \end{itemize}
+    \end{itemize}
+    \item \textbf{K byte} da elaborare, contenenti valori tra -128 e +127, che rappresentano il vettore numerico
+    da processare.
+\end{itemize}
+
+Graficamente:
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{resources/memoria.png}
+    \caption{Struttura della memoria}
+    \label{fig:png}
+\end{figure}
+
+\noindent Quindi unendo gli $8$ bit di $K_1$ con gli altri $8$ bit di $K_2$ ottengo un numero $K$ di $16$ bit. Questo numero è fondamentale per:
+\begin{itemize}
+    \item capire quando terminare la lettura delle $W_i$ da processare (quando si arriva a $17 + K$ byte)
+    \item saper in che indirizzo di memoria scrivere il primo risultato $R_1$ (al $(17+K+1)$esimo byte)
+\end{itemize}
+
+\subsection{Computare il Risultato}
+
+Il filtro applicato ha la seguente formula matematica:
+$$
+f'(i) = \frac{1}{n} \sum_{j=-I}^{I} C_j \cdot f[j+i]
+$$
+Dove \textbf{I=2} per il filtro di ordine 3 e \textbf{I=3} per il filtro di ordine 5.
+
+\noindent Bisogna inoltre assicurarsi che il risultato del filtraggio prima della normalizzazione ($\sum C_j \cdot f[j+i]$) abbia un numero di bit adeguato per la sua rappresentazione.
+
+\noindent La divisione per \texttt{n} viene approssimata come segue:
+\begin{itemize}
+    \item $\frac{1}{12} \approx \frac{1}{16} + \frac{1}{64} + \frac{1}{256} + \frac{1}{1024}$
+    \item $\frac{1}{60} \approx \frac{1}{64} + \frac{1}{1024}$
+\end{itemize}
+
+Poiché ogni shift a destra equivale a una divisione per due, nel caso di numeri negativi si applica
+una correzione: se $\text{val} \gg m < 0$ , si aggiunge $+1$ per ridurre l'errore di troncamento.
+
+Per esempio:
+\begin{gather*}
+-40 \times \frac{1}{12} \approx (-40 \gg 4 + 1) + (-40 \gg 6 + 1) + (-40 \gg 8 + 1) + (-40 \gg 10 + 1)
+\end{gather*}
+
+\subsection{Funzionamento Modulo}
+
+Il modulo ha i seguenti segnali:
+\begin{itemize}
+    \item Ingressi:
+    \begin{itemize}
+        \item \texttt{i\_start} = \textbf{START} (1 bit): avvia l'elaborazione.
+        \item \texttt{i\_add} (16 bit): indirizzo della memoria di partenza.
+        \item \texttt{i\_clk} = \textbf{CLOCK}
+        \item \texttt{i\_rst} = \textbf{RESET}.
+    \end{itemize}
+    \item Uscite:
+    \begin{itemize}
+        \item \textbf{DONE} (1 bit): indica la fine dell'elaborazione.
+    \end{itemize}
+\end{itemize}
+
+\noindent Il modulo segue la seguente sequenza operativa:
+\begin{enumerate}
+    \item All'avvio \texttt{RESET=1} e \texttt{DONE=0}.
+    \item Quando \texttt{RESET} torna a \texttt{0}, il modulo attende che quando il \texttt{CLOCK} sale ad $1$ che \texttt{START} sia pari a $1$.
+    \item Legge i dati da memoria, esegue il filtraggio e scrive i risultati.
+    \item Alla fine dell'elaborazione, alza \texttt{DONE=1}.
+    \item Il modulo attende che \texttt{START} torni a \texttt{0} prima di un nuovo ciclo.
+    \item Infine \texttt{DONE=0} per prepararsi al prossimo ciclo.
+\end{enumerate}
+
+\noindent Nota: Prima del primo START=1, il modulo deve aver ricevuto RESET=1. Dopo la prima
+
+
+
+\section{Sezione Due}
+La seconda sezione della relazione, dove si possono presentare ulteriori analisi o risultati. Potremmo anche includere formule matematiche:
+$$ E=mc^2 $$
+Oppure inserire un'immagine (assicurati di avere un file `immagine.png` nella stessa cartella del file .tex):
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{example-image-a} % Sostituisci con il nome della tua immagine
+    \caption{Una didascalia per l'immagine.}
+    \label{fig:immagine}
+\end{figure}
+
+\section{Conclusioni}
+In questa sezione riassumiamo i punti chiave della relazione e presentiamo le conclusioni. Si possono anche suggerire lavori futuri o ulteriori ricerche.
+
+\end{document}
