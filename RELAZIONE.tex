@@ -135,6 +135,8 @@ Le altre porte sono per la lettura e scrittura della memoria
     \item \texttt{o\_mem\_data} $[7-0]$ segnale fornito al chip dalla memoria corrispondente al valore risultante della precedente lettura (con $\texttt{o\_mem\_we} = 0$ e $\texttt{o\_mem\_en} = 1$)
 \end{itemize}
 
+Queste porte sono meglio approfondite nella sezione dedicata \ref{subsubsec:memoria}.
+
 \subsection{Struttura Memoria}
 
 Tutti i dati da utilizzare sono memorizzati sequenzialmente a partire da un indirizzo specificato
@@ -225,9 +227,38 @@ In qualsiasi momento \texttt{RESET} può passare da $0 \to 1$ e, in modo asincro
     \item ...
 \end{enumerate}
 
-\subsection{Lavorare con la Memoria}
+\subsection{Lavorare con la Memoria}\label{subsubsec:memoria}
+
+La comunicazione con la memoria esterna, gestita a livello del Top Module, avviene tramite un'interfaccia standardizzata che include i seguenti connettori:
+\begin{itemize}
+    
+    \item \texttt{o\_mem\_en} (Output, \texttt{std\_logic}): Questo segnale viene asserito a $1$ per abilitare la comunicazione con la memoria esterna, sia per operazioni di lettura che di scrittura. Quando \texttt{o\_mem\_en} è $0$, la memoria è disabilitata e non risponde alle richieste.
+    
+    \item \texttt{o\_mem\_we} (Output, \texttt{std\_logic}): Questo segnale definisce il tipo di operazione sulla memoria. Se \texttt{o\_mem\_we} è $0$, l'operazione è di lettura. Se \texttt{o\_mem\_we} è $1$, l'operazione è di scrittura. È fondamentale che \texttt{o\_mem\_en} sia attivo quando \texttt{o\_mem\_we} viene pilotato.
+    
+    \item \texttt{o\_mem\_addr} (Output, \texttt{std\_logic\_vector(15 downto 0)}): Questo è l'indirizzo a 16 bit nella memoria su cui il sistema desidera operare. Viene utilizzato sia per le letture che per le scritture, specificando l'indirizzo di memoria target (in cui scrivere o da cui leggere).
+    
+    \item \texttt{o\_mem\_data} (Output, \texttt{std\_logic\_vector(7 downto 0)}): Questa porta serve ad "inviare" il dato a 8 bit che il componente intende scrivere nella memoria. Questo segnale è valido e viene letto dalla memoria solo quando \texttt{o\_mem\_en=1} e \texttt{o\_mem\_we = 1}.
+    
+    \item \texttt{i\_mem\_data} (Input, \texttt{std\_logic\_vector(7 downto 0)}): Questo connettore riceve il dato a 8 bit letto dalla memoria esterna. Il valore su \texttt{i\_mem\_data} è valido e deve essere campionato dal componente quando \texttt{o\_mem\_en=1} e \texttt{o\_mem\_we=0}, e dopo il tempo di propagazione della memoria.
+\end{itemize}
+
+\noindent Data la mancanza di un segnale di acknowledgment da parte della memoria, consideriamo l'operazione conclusa sempre $1$ ciclo di clock dopo aver mandato il comando.
 
 
+\subsubsection{Operazione di Scrittura:}
+\begin{enumerate}
+    
+    \item Al fronte di salita del clock $T_0$, il sistema asserisce \texttt{o\_mem\_en = 1}, \texttt{o\_mem\_we = 1}, \texttt{o\_mem\_addr} all'indirizzo desiderato e \texttt{o\_mem\_data} con il valore da scrivere.
+    
+    \item Al fronte di salita del clock $T_1$ (cioè 1 CLK dopo), la scrittura nella memoria è considerata completata e il dato è stato memorizzato all'indirizzo specificato. Il sistema può quindi modificare i due segnali di controllo oppure avviare una nuova operazione.
+\end{enumerate}
+
+\subsubsection{Operazione di Lettura:}
+\begin{enumerate}
+    \item Al fronte di salita del clock $T_0$, il sistema asserisce \texttt{o\_mem\_en = 1}, \texttt{o\_mem\_we = 0} e \texttt{o\_mem\_addr} all'indirizzo da leggere.
+    \item Al fronte di salita del clock $T_1$ (cioè 1 CLK dopo), il dato letto dalla memoria sarà disponibile e stabile sul connettore \texttt{i\_mem\_data} e potrà essere campionato dal sistema. Il sistema può quindi disasserire i segnali di controllo o avviare una nuova operazione.
+\end{enumerate}
 
 \section{Architettura del Componente}
 
