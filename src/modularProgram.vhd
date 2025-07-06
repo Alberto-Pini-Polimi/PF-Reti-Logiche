@@ -860,7 +860,7 @@ entity CU is
         i_cru_cp3_5       : in  signed(7 downto 0);
         i_cru_w1_addr     : in  std_logic_vector(15 downto 0);
 
-        -- NUOVA INTERFACCIA con WRU
+        -- interfaccia con WRU
         o_wru_start       : out std_logic;
         i_wru_done        : in  std_logic;
         o_wru_center_addr : out std_logic_vector(15 downto 0);
@@ -1159,16 +1159,12 @@ architecture Structural of project_reti_logiche is
     signal s_cru_done          : std_logic;
     signal s_cru_k             : std_logic_vector(15 downto 0);
     signal s_cru_s             : std_logic;
-    signal s_cru_cn2_3         : signed(7 downto 0);
-    signal s_cru_cn1_3         : signed(7 downto 0);
-    signal s_cru_cp1_3         : signed(7 downto 0);
-    signal s_cru_cp2_3         : signed(7 downto 0);
-    signal s_cru_cn3_5         : signed(7 downto 0);
-    signal s_cru_cn2_5         : signed(7 downto 0);
-    signal s_cru_cn1_5         : signed(7 downto 0);
-    signal s_cru_cp1_5         : signed(7 downto 0);
-    signal s_cru_cp2_5         : signed(7 downto 0);
-    signal s_cru_cp3_5         : signed(7 downto 0);
+    signal s_cru_cn3           : signed(7 downto 0);
+    signal s_cru_cn2           : signed(7 downto 0);
+    signal s_cru_cn1           : signed(7 downto 0);
+    signal s_cru_cp1           : signed(7 downto 0);
+    signal s_cru_cp2           : signed(7 downto 0);
+    signal s_cru_cp3           : signed(7 downto 0);
     signal s_cru_w1_addr       : std_logic_vector(15 downto 0);
 
     -- Segnali ALU3
@@ -1217,65 +1213,78 @@ architecture Structural of project_reti_logiche is
     -- Componente CRU (Configuration Reader Unit)
     component CRU is
         port (
-            i_clk       : in  std_logic;
-            i_rst       : in  std_logic;
-            i_start     : in  std_logic;
-            o_done      : out std_logic;
-            o_k         : out std_logic_vector(15 downto 0);    -- Lunghezza della sequenza W
-            o_s         : out std_logic;                      -- Ordine del filtro ('0' per 3, '1' per 5)
-            o_cn2_3     : out signed(7 downto 0);
-            o_cn1_3     : out signed(7 downto 0);
-            o_cp1_3     : out signed(7 downto 0);
-            o_cp2_3     : out signed(7 downto 0);
-            o_cn3_5     : out signed(7 downto 0);
-            o_cn2_5     : out signed(7 downto 0);
-            o_cn1_5     : out signed(7 downto 0);
-            o_cp1_5     : out signed(7 downto 0);
-            o_cp2_5     : out signed(7 downto 0);
-            o_cp3_5     : out signed(7 downto 0);
-            o_w1_addr   : out std_logic_vector(15 downto 0)   -- Indirizzo di partenza per la sequenza W
+            i_clk : in std_logic;
+            i_rst : in std_logic;
+            i_start : in std_logic;
+            i_base_addr : in std_logic_vector(15 downto 0);
+            
+            -- Output dei parametri letti
+            o_k : out std_logic_vector(15 downto 0);
+            o_s : out std_logic;
+            o_cn3 : out signed(7 downto 0);
+            o_cn2 : out signed(7 downto 0);
+            o_cn1 : out signed(7 downto 0);
+            o_cp1 : out signed(7 downto 0);
+            o_cp2 : out signed(7 downto 0);
+            o_cp3 : out signed(7 downto 0);
+            o_w1_addr : out std_logic_vector(15 downto 0);
+            o_done : out std_logic;
+            
+            -- Interfaccia con MCU
+            o_start_mcu : out std_logic;
+            i_done_mcu : in std_logic;
+            o_mcu_addr : out std_logic_vector(15 downto 0);
+            o_mcu_write_flag : out std_logic;
+            i_mcu_data : in std_logic_vector(7 downto 0);
+            o_mcu_data : out std_logic_vector(7 downto 0)
         );
     end component;
 
     -- Componente ALU3 (Arithmetic Logic Unit per Ordine 3)
     component ALU3 is
         port (
-            i_clk       : in  std_logic;
-            i_rst       : in  std_logic;
-            i_start     : in  std_logic;
-            o_done      : out std_logic;
-            i_cn2       : in  signed(7 downto 0);
-            i_cn1       : in  signed(7 downto 0);
-            i_cp1       : in  signed(7 downto 0);
-            i_cp2       : in  signed(7 downto 0);
-            i_prev2     : in  signed(7 downto 0);
-            i_prev1     : in  signed(7 downto 0);
-            i_next1     : in  signed(7 downto 0);
-            i_next2     : in  signed(7 downto 0);
-            o_result    : out signed(7 downto 0)
+            i_clk : in std_logic;
+            i_rst : in std_logic;
+            i_start_alu3 : in std_logic;
+
+            i_cn2_3 : in signed(7 downto 0);
+            i_cn1_3 : in signed(7 downto 0);
+            i_cp1_3 : in signed(7 downto 0);
+            i_cp2_3 : in signed(7 downto 0);
+
+            i_prev2 : in signed(7 downto 0);
+            i_prev1 : in signed(7 downto 0);
+            i_next1 : in signed(7 downto 0);
+            i_next2 : in signed(7 downto 0);
+
+            o_done_alu3 : out std_logic;
+            o_result_alu3 : out signed(7 downto 0)
         );
     end component;
 
     -- Componente ALU5 (Arithmetic Logic Unit per Ordine 5)
     component ALU5 is
         port (
-            i_clk       : in  std_logic;
-            i_rst       : in  std_logic;
-            i_start     : in  std_logic;
-            o_done      : out std_logic;
-            i_cn3       : in  signed(7 downto 0);
-            i_cn2       : in  signed(7 downto 0);
-            i_cn1       : in  signed(7 downto 0);
-            i_cp1       : in  signed(7 downto 0);
-            i_cp2       : in  signed(7 downto 0);
-            i_cp3       : in  signed(7 downto 0);
-            i_prev3     : in  signed(7 downto 0);
-            i_prev2     : in  signed(7 downto 0);
-            i_prev1     : in  signed(7 downto 0);
-            i_next1     : in  signed(7 downto 0);
-            i_next2     : in  signed(7 downto 0);
-            i_next3     : in  signed(7 downto 0);
-            o_result    : out signed(7 downto 0)
+            i_clk : in std_logic;
+            i_rst : in std_logic;
+            i_start_alu5 : in std_logic;
+
+            i_cn3_5 : in signed(7 downto 0);
+            i_cn2_5 : in signed(7 downto 0);
+            i_cn1_5 : in signed(7 downto 0);
+            i_cp1_5 : in signed(7 downto 0);
+            i_cp2_5 : in signed(7 downto 0);
+            i_cp3_5 : in signed(7 downto 0);
+
+            i_prev3 : in signed(7 downto 0);
+            i_prev2 : in signed(7 downto 0);
+            i_prev1 : in signed(7 downto 0);
+            i_next1 : in signed(7 downto 0);
+            i_next2 : in signed(7 downto 0);
+            i_next3 : in signed(7 downto 0);
+
+            o_done_alu5 : out std_logic;
+            o_result_alu5 : out signed(7 downto 0)
         );
     end component;
 
@@ -1311,20 +1320,20 @@ architecture Structural of project_reti_logiche is
     -- Componente CU (Control Unit)
     component CU is
         port (
-            i_clk      : in  std_logic;
-            i_rst      : in  std_logic;
-            i_start    : in  std_logic;
-            i_base_addr : in  std_logic_vector(15 downto 0);
+            i_clk       : in  std_logic;  -- Clock di sistema
+            i_rst       : in  std_logic;  -- Reset asincrono
+            i_start     : in  std_logic;  -- Segnale di avvio dal Top Module
+            i_base_addr : in  std_logic_vector(15 downto 0); -- Indirizzo di partenza in memoria (dal Top Module)
 
-            o_done     : out std_logic;
+            o_done     : out std_logic;  -- Segnale di completamento per il Top Module
 
-            -- Interfaccia con MCU (CU è il master, WRU è lo slave per le letture della finestra)
+            -- Interfaccia con MCU (CU è il master)
             o_mcu_start       : out std_logic;
             i_mcu_done        : in  std_logic;
             o_mcu_addr        : out std_logic_vector(15 downto 0);
             o_mcu_write_flag  : out std_logic;
-            o_mcu_data_write  : out std_logic_vector(7 downto 0);
-            i_mcu_data_read   : in  std_logic_vector(7 downto 0);
+            o_mcu_data_write  : out std_logic_vector(7 downto 0); -- Dato da scrivere a MCU
+            i_mcu_data_read   : in  std_logic_vector(7 downto 0);  -- Dato letto da MCU
 
             -- Interfaccia con ALU3
             o_alu3_start      : out std_logic;
@@ -1373,7 +1382,7 @@ architecture Structural of project_reti_logiche is
             i_cru_cp3_5       : in  signed(7 downto 0);
             i_cru_w1_addr     : in  std_logic_vector(15 downto 0);
 
-            -- Interfaccia con WRU
+            -- interfaccia con WRU
             o_wru_start       : out std_logic;
             i_wru_done        : in  std_logic;
             o_wru_center_addr : out std_logic_vector(15 downto 0);
@@ -1401,19 +1410,18 @@ begin
         i_clk       => i_clk,
         i_rst       => i_rst,
         i_start     => s_cru_start,
+        i_base_addr => i_add,
+        i_done_mcu  => s_mem_done_ack,
+        i_mcu_data  => s_mcu_data_write_cu,
         o_done      => s_cru_done,
         o_k         => s_cru_k,
         o_s         => s_cru_s,
-        o_cn2_3     => s_cru_cn2_3,
-        o_cn1_3     => s_cru_cn1_3,
-        o_cp1_3     => s_cru_cp1_3,
-        o_cp2_3     => s_cru_cp2_3,
-        o_cn3_5     => s_cru_cn3_5,
-        o_cn2_5     => s_cru_cn2_5,
-        o_cn1_5     => s_cru_cn1_5,
-        o_cp1_5     => s_cru_cp1_5,
-        o_cp2_5     => s_cru_cp2_5,
-        o_cp3_5     => s_cru_cp3_5,
+        o_cn3       => s_cru_cn3,
+        o_cn2       => s_cru_cn2,
+        o_cn1       => s_cru_cn1,
+        o_cp1       => s_cru_cp1,
+        o_cp2       => s_cru_cp2,
+        o_cp3       => s_cru_cp3,
         o_w1_addr   => s_cru_w1_addr
     );
 
@@ -1445,17 +1453,17 @@ begin
     port map (
         i_clk       => i_clk,
         i_rst       => i_rst,
-        i_start     => s_alu3_start,
-        o_done      => s_alu3_done,
-        i_cn2       => s_alu3_cn2_3,
-        i_cn1       => s_alu3_cn1_3,
-        i_cp1       => s_alu3_cp1_3,
-        i_cp2       => s_alu3_cp2_3,
+        i_start_alu3 => s_alu3_start,
+        o_done_alu3  => s_alu3_done,
+        i_cn2_3       => s_alu3_cn2_3,
+        i_cn1_3       => s_alu3_cn1_3,
+        i_cp1_3       => s_alu3_cp1_3,
+        i_cp2_3       => s_alu3_cp2_3,
         i_prev2     => s_alu3_prev2,
         i_prev1     => s_alu3_prev1,
         i_next1     => s_alu3_next1,
         i_next2     => s_alu3_next2,
-        o_result    => s_alu3_result
+        o_result_alu3    => s_alu3_result
     );
 
     -- Istanziazione dell'ALU5
@@ -1463,21 +1471,21 @@ begin
     port map (
         i_clk       => i_clk,
         i_rst       => i_rst,
-        i_start     => s_alu5_start,
-        o_done      => s_alu5_done,
-        i_cn3       => s_alu5_cn3_5,
-        i_cn2       => s_alu5_cn2_5,
-        i_cn1       => s_alu5_cn1_5,
-        i_cp1       => s_alu5_cp1_5,
-        i_cp2       => s_alu5_cp2_5,
-        i_cp3       => s_alu5_cp3_5,
+        i_start_alu5     => s_alu5_start,
+        o_done_alu5      => s_alu5_done,
+        i_cn3_5       => s_alu5_cn3_5,
+        i_cn2_5       => s_alu5_cn2_5,
+        i_cn1_5       => s_alu5_cn1_5,
+        i_cp1_5       => s_alu5_cp1_5,
+        i_cp2_5       => s_alu5_cp2_5,
+        i_cp3_5       => s_alu5_cp3_5,
         i_prev3     => s_alu5_prev3,
         i_prev2     => s_alu5_prev2,
         i_prev1     => s_alu5_prev1,
         i_next1     => s_alu5_next1,
         i_next2     => s_alu5_next2,
         i_next3     => s_alu5_next3,
-        o_result    => s_alu5_result
+        o_result_alu5    => s_alu5_result
     );
 
     -- Istanziazione della Control Unit (CU)
@@ -1532,16 +1540,16 @@ begin
         i_cru_done        => s_cru_done,
         i_cru_k           => s_cru_k,
         i_cru_s           => s_cru_s,
-        i_cru_cn2_3       => s_cru_cn2_3,
-        i_cru_cn1_3       => s_cru_cn1_3,
-        i_cru_cp1_3       => s_cru_cp1_3,
-        i_cru_cp2_3       => s_cru_cp2_3,
-        i_cru_cn3_5       => s_cru_cn3_5,
-        i_cru_cn2_5       => s_cru_cn2_5,
-        i_cru_cn1_5       => s_cru_cn1_5,
-        i_cru_cp1_5       => s_cru_cp1_5,
-        i_cru_cp2_5       => s_cru_cp2_5,
-        i_cru_cp3_5       => s_cru_cp3_5,
+        i_cru_cn2_3       => s_cru_cn2,
+        i_cru_cn1_3       => s_cru_cn1,
+        i_cru_cp1_3       => s_cru_cp1,
+        i_cru_cp2_3       => s_cru_cp2,
+        i_cru_cn3_5       => s_cru_cn3,
+        i_cru_cn2_5       => s_cru_cn2,
+        i_cru_cn1_5       => s_cru_cn1,
+        i_cru_cp1_5       => s_cru_cp1,
+        i_cru_cp2_5       => s_cru_cp2,
+        i_cru_cp3_5       => s_cru_cp3,
         i_cru_w1_addr     => s_cru_w1_addr,
 
         -- Connessioni WRU
