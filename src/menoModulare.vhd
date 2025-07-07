@@ -60,7 +60,7 @@ begin
 
                 when READ_K1 =>
                     o_mem_en <= '1';
-                    o_mem_addr <= std_logic_vector(unsigned(mem_init_addr) + 1);
+                    o_mem_addr <= std_logic_vector(unsigned(i_base_addr) + 1);
                     current_state <= WAIT_K1;
 
                 when WAIT_K1 =>
@@ -69,7 +69,7 @@ begin
 
                 when READ_K2 =>
                     o_mem_en <= '1';
-                    o_mem_addr <= std_logic_vector(unsigned(mem_init_addr) + 2);
+                    o_mem_addr <= std_logic_vector(unsigned(i_base_addr) + 2);
                     current_state <= WAIT_K2;
 
                 when WAIT_K2 =>
@@ -78,7 +78,7 @@ begin
 
                 when READ_S =>
                     o_mem_en <= '1';
-                    o_mem_addr <= std_logic_vector(unsigned(mem_init_addr) + 3);
+                    o_mem_addr <= std_logic_vector(unsigned(i_base_addr) + 3);
                     current_state <= WAIT_S;
 
                 when WAIT_S =>
@@ -91,8 +91,13 @@ begin
                     v_k(15 downto 8) := s_k1; 
                     v_k(7 downto 0)  := s_k2;
                     s_k <= unsigned(v_k);
+                    -- e notifico la CU
+                    s_read_done <= '1';
 
-                    current_state <= IDLE;
+                    -- prima di questo punto la CU deve aver tolto la flag di start!! altrimenti loop infinit in aguato
+                    if i_read_start = '0' then
+                        current_state <= IDLE; 
+                    end if;
 
             end case;
         end if;
@@ -263,11 +268,11 @@ begin
                         end case;
                         
                         -- al quarto coefficiente ho finito di leggerli tutti
-                        if coeff_counter = 3 then
+                        if s_counter_3 = 3 then
                             current_state <= CONFIG_DONE;
                         else
                             -- altrimenti continuo con l'iterazione
-                            coeff_counter <= coeff_counter + 1;
+                            s_counter_3 <= s_counter_3 + 1;
                             current_state <= ASK_FOR_COEFFS;
                         end if;
                     else
@@ -281,10 +286,10 @@ begin
                         end case;
                         
                         -- al sesto coefficiente ho finito la lettura
-                        if coeff_counter = 5 then
+                        if s_counter_5 = 5 then
                             current_state <= CONFIG_DONE;
                         else
-                            coeff_counter <= coeff_counter + 1;
+                            s_counter_5 <= s_counter_5 + 1;
                             current_state <= ASK_FOR_COEFFS;
                         end if;
                     end if;
@@ -292,7 +297,10 @@ begin
 
                 when READ_DONE =>
                     s_read_done <= '1';
-                    current_state <= IDLE; -- appena la CU da il permesso di iniziare al ciclo dopo dovrebbe togliere subito questo permesso!! altrimenti si potrebbe creare un ciclo infinito
+                    -- attendo la deselezione del flag di start per evitare cicli infiniti!!
+                    if i_read_start = '0' then
+                        current_state <= IDLE; 
+                    end if;
 
             end case;
         end if;
