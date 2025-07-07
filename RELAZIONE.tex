@@ -146,10 +146,10 @@ Tutti i dati da utilizzare sono memorizzati sequenzialmente a partire da un indi
     \begin{itemize}
         \item \textbf{K1} e \textbf{K2}: due byte che indicano la lunghezza della sequenza K dei dati di W (\texttt{K1} è il byte più significativo, lunghezza minima = 7 byte).
         \item \textbf{S}: un byte che indica quale filtro selezionare tra ordine 3 e ordine 5 (bit meno significativo: 0 $\rightarrow$ ordine 3, 1 $\rightarrow$ ordine 5).
-        \item Da \textbf{C1} a \textbf{C14}: $14$ byte contenenti i coefficienti dei filtri. Per esempio
+        \item Da \textbf{C1} a \textbf{C14}: $14$ byte contenenti i coefficienti dei filtri. I coefficienti sono presenti per entrambi i filtri indipendentemente dal valore di \texttt{S}. Per esempio
         \begin{itemize}
-            \item Ordine 3: c=[\texttt{0, -1, 8, 0, -8, 1, 0}], normalizzazione $n=12$.
-            \item Ordine 5: c=[\texttt{1, -9, 45, 0, -45, 9, -1}], normalizzazione $n=60$.
+            \item Ordine 3: c=[\texttt{0, -1, 8, 0, -8, 1, 0}] da \texttt{C1} a \texttt{C7}, normalizzazione $n=12$.
+            \item Ordine 5: c=[\texttt{1, -9, 45, 0, -45, 9, -1}] da \texttt{C8} a \texttt{C14}, normalizzazione $n=60$.
         \end{itemize}
     \end{itemize}
     \item \textbf{K byte} da elaborare, contenenti valori tra -128 e +127, che rappresentano il vettore numerico
