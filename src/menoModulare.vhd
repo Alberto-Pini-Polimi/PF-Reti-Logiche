@@ -601,7 +601,6 @@ entity WRU is
         o_prev3           : out signed(7 downto 0); -- Valido solo per ordine 5
         o_prev2           : out signed(7 downto 0);
         o_prev1           : out signed(7 downto 0);
-        o_current_W       : out signed(7 downto 0);
         o_next1           : out signed(7 downto 0);
         o_next2           : out signed(7 downto 0);
         o_next3           : out signed(7 downto 0); -- Valido solo per ordine 5
@@ -635,7 +634,6 @@ architecture Behavioral of WRU is
     signal s_prev3      : signed(7 downto 0) := (others => '0');
     signal s_prev2      : signed(7 downto 0) := (others => '0');
     signal s_prev1      : signed(7 downto 0) := (others => '0');
-    signal s_current_W  : signed(7 downto 0) := (others => '0');
     signal s_next1      : signed(7 downto 0) := (others => '0');
     signal s_next2      : signed(7 downto 0) := (others => '0');
     signal s_next3      : signed(7 downto 0) := (others => '0');
@@ -676,8 +674,8 @@ begin
                     if i_read_start = '1' then
                         -- allora salvo tutti gli input in segnali da usare durante il processo
                         s_first_W_addr <= i_first_W_addr;
-                        s_W_index <= i_W_index;
-                        s_k <= i_k;
+                        s_W_index <= to_unsigned(i_W_index, 16);
+                        s_k <= to_unsigned(i_k, 16);
                         s_s <= i_s;
                         s_wru_done <= '0';
 
@@ -706,6 +704,7 @@ begin
                     -- immagazino quindi il dato che mi arriva dalla memoria
                     s_prev3 <= signed(i_mem_data);
                     current_state <= ASK_FOR_PREV2; -- e chiedo quindi di leggere prev2
+                    s_mem_en <= '0';
 
                 -- per leggere prev2...
                 when ASK_FOR_PREV2 =>
@@ -724,6 +723,7 @@ begin
                     -- immagazino quindi il dato che mi arriva dalla memoria
                     s_prev2 <= signed(i_mem_data);
                     current_state <= ASK_FOR_PREV1; -- e chiedo quindi di leggere prev1
+                    s_mem_en <= '0';
 
                 -- per leggere prev1...
                 when ASK_FOR_PREV1 =>
@@ -742,6 +742,7 @@ begin
                     -- immagazino quindi il dato che mi arriva dalla memoria
                     s_prev1 <= signed(i_mem_data);
                     current_state <= ASK_FOR_NEXT1; -- e chiedo quindi di leggere next1
+                    s_mem_en <= '0';
 
                 -- per leggere next1...
                 when ASK_FOR_NEXT1 =>
@@ -763,6 +764,7 @@ begin
                     -- immagazino quindi il dato che mi arriva dalla memoria
                     s_next1 <= signed(i_mem_data);
                     current_state <= ASK_FOR_NEXT2; -- e chiedo di leggere next2
+                    s_mem_en <= '0';
 
                 -- per leggere next2...
                 when ASK_FOR_NEXT2 =>
@@ -782,6 +784,7 @@ begin
                     -- immagazino quindi il dato che mi arriva dalla memoria
                     s_next2 <= signed(i_mem_data);
                     current_state <= ASK_FOR_NEXT3; -- e chiedo di leggere next3
+                    s_mem_en <= '0';
 
                 -- per leggere next3...
                 when ASK_FOR_NEXT3 =>
@@ -800,10 +803,11 @@ begin
                     -- immagazino quindi il dato che mi arriva dalla memoria
                     s_next3 <= signed(i_mem_data);
                     current_state <= DONE; -- e finalmente finisco
+                    s_mem_en <= '0';
 
                 when DONE =>
                     s_wru_done <= '1';
-                    if i_start = '0' then -- Aspetta che il Top Module de-asserisca start
+                    if i_read_start = '0' then -- Aspetta che il Top Module de-asserisca start
                         current_state <= IDLE;
                     end if;
 
