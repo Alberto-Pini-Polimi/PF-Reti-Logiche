@@ -186,7 +186,7 @@ architecture Behavioral of CLM is
 
     -- faccio anche i segnali per interfacciarsi con la CU
     signal s_read_done : std_logic := '0';
-    signal s_base_addr : std_logic_vector(15 downto 0) := (others => '0');
+    signal s_base_addr : std_logic_vector(15 downto 0) := (others => '0'); -- solo per memorizzare
 
     -- ora i segnali per la memoria
     signal s_mem_addr : std_logic_vector(15 downto 0) := (others => '0');
@@ -578,8 +578,260 @@ end architecture Behavioral;
 -- l'output sono semplicemente i 3 valori prima di current_W ed i 3 successivi
 -- oltre che ovviamente un akn per la CU
 
--- Data Window Management Module (DMW)
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+-- Window Reader Unit (WRU)
 -- ----------------------------------------------------
+entity WRU is
+    port (
+        i_clk             : in  std_logic;
+        i_rst             : in  std_logic;
+        i_read_start      : in  std_logic;                  -- Avvia la lettura della finestra
+        i_s  : in  std_logic;                  -- '0' per ordine 3, '1' per ordine 5
+
+        -- l'idea è che mi serve solo il primo indirizzo per trovare W1 (con index 0)
+        i_first_W_addr     : in  std_logic_vector(15 downto 0); -- L'indirizzo del primo valore W1
+        i_W_index : in integer range 60000 to 0; -- e poi naturalmente l'indice per trovare l'i-esimo valore W_(i+1) 
+        i_k : in integer range 60000 to 0; -- k è il numero i parole, mentre l'indice sopra parte da 0!!
+        -- uso l'indice per permettermi di sapere se sono tra le prime 2/3 posizioni iniziali e finali per aggiungere gli zeri
+
+        -- Output dei dati della finestra
+        o_prev3           : out signed(7 downto 0); -- Valido solo per ordine 5
+        o_prev2           : out signed(7 downto 0);
+        o_prev1           : out signed(7 downto 0);
+        o_current_W       : out signed(7 downto 0);
+        o_next1           : out signed(7 downto 0);
+        o_next2           : out signed(7 downto 0);
+        o_next3           : out signed(7 downto 0); -- Valido solo per ordine 5
+
+        o_wru_done        : out std_logic;                  -- Segnale di completamento lettura finestra
+
+        -- Interfaccia da collegare con la memoria (solo in lettura)
+        o_mem_addr : out std_logic_vector(15 downto 0); -- l'indirizzo di memoria dove scrivere
+        o_mem_en : out std_logic; -- non metto _we dato che non devo mai scrivere
+        i_mem_data : in std_logic_vector(7 downto 0); -- il dato in uscita dalla memoria
+
+    );
+end entity WRU;
+architecture Behavioral of WRU is
+
+    -- Stati della FSM interna
+    type state_type is (
+        IDLE,
+        ASK_FOR_PREV3, READ_PREV3, -- Solo per ordine 5
+        ASK_FOR_PREV2, READ_PREV2,
+        ASK_FOR_PREV1, READ_PREV1,
+        -- non c'è ovviamente bisogno di leggere la W corrente
+        ASK_FOR_NEXT1, READ_NEXT1,
+        ASK_FOR_NEXT2, READ_NEXT2,
+        ASK_FOR_NEXT3, READ_NEXT3, -- Solo per ordine 5
+        DONE
+    );
+    signal current_state : state_type := IDLE;
+
+    -- Registri interni per memorizzare i dati della finestra
+    signal s_prev3      : signed(7 downto 0) := (others => '0');
+    signal s_prev2      : signed(7 downto 0) := (others => '0');
+    signal s_prev1      : signed(7 downto 0) := (others => '0');
+    signal s_current_W  : signed(7 downto 0) := (others => '0');
+    signal s_next1      : signed(7 downto 0) := (others => '0');
+    signal s_next2      : signed(7 downto 0) := (others => '0');
+    signal s_next3      : signed(7 downto 0) := (others => '0');
+
+    -- Segnali di controllo per la lettura della memoria
+    signal s_mem_addr : std_logic_vector(15 downto 0) := (others => '0');
+    signal s_mem_en : std_logic := '0';
+
+    -- faccio anche i segnali per interfacciarsi con la CU
+    signal s_wru_done : std_logic := '0';
+    signal s_first_W_addr : std_logic_vector(15 downto 0) := (others => '0'); -- solo per memorizzare dopo lo start
+    signal s_W_index : unsigned := 0;
+    signal s_k : unsigned := 0;
+    signal s_s : std_logic := '0';
+
+begin
+
+    process (i_clk, i_rst)
+    begin
+
+        if i_rst = '1' then
+            current_state <= IDLE;
+            s_prev3 <= (others => '0');
+            s_prev2 <= (others => '0');
+            s_prev1 <= (others => '0');
+            s_next1 <= (others => '0');
+            s_next2 <= (others => '0');
+            s_next3 <= (others => '0');
+            s_mem_en <= '0';
+            s_first_W_addr <= (others => '0');
+            s_wru_done <= '0';
+
+        elsif rising_edge(i_clk) then
+
+            case current_state is
+                when IDLE =>
+                    -- quando la CU mi da il permesso di partire
+                    if i_read_start = '1' then
+                        -- allora salvo tutti gli input in segnali da usare durante il processo
+                        s_first_W_addr <= i_first_W_addr;
+                        s_W_index <= i_W_index;
+                        s_k <= i_k;
+                        s_s <= i_s;
+                        s_wru_done <= '0';
+
+                        -- poi cambio stato in base all'ordine del filtro
+                        if s_s = '0' then --filtro di ordine 3
+                            current_state <= ASK_FOR_PREV2;
+                        else -- filtro di ordine 5
+                            current_state <= ASK_FOR_PREV3;
+                        end if;
+                    end if;
+
+                -- per leggere prev3...
+                when ASK_FOR_PREV3 =>
+                    -- se non sono nelle prime 3 posizioni iniziali
+                    if s_W_index >= 3 then
+                        s_mem_en <= '1'; -- attivo la memoria
+                        s_mem_addr <= std_logic_vector(unsigned(s_first_W_addr) + s_W_index - 3); -- e chiedo prev3
+                        current_state <= READ_PREV3; -- e poi passo alla lettura del valore richiesto
+                    else -- altrimenti vuol dire che prev3 = 0
+                        s_mem_en <= '0';
+                        s_prev3 <= (others => '0'); -- setto prev3 a 0
+                        current_state <= ASK_FOR_PREV2; -- e chiedo direttamente di leggere prev2
+                    end if;
+
+                when READ_PREV3 =>
+                    -- immagazino quindi il dato che mi arriva dalla memoria
+                    s_prev3 <= signed(i_mem_data);
+                    current_state <= ASK_FOR_PREV2; -- e chiedo quindi di leggere prev2
+
+                -- per leggere prev2...
+                when ASK_FOR_PREV2 =>
+                    -- se non sono nelle prime 2 posizioni iniziali
+                    if s_W_index >= 2 then
+                        s_mem_en <= '1'; -- attivo la memoria
+                        s_mem_addr <= std_logic_vector(unsigned(s_first_W_addr) + s_W_index - 2); -- e chiedo prev2
+                        current_state <= READ_PREV2; -- e poi passo alla lettura del valore richiesto
+                    else -- altrimenti vuol dire che prev2 = 0
+                        s_mem_en <= '0';
+                        s_prev2 <= (others => '0'); -- setto prev2 a 0
+                        current_state <= ASK_FOR_PREV1; -- e chiedo direttamente di leggere prev2
+                    end if;
+
+                when READ_PREV2 =>
+                    -- immagazino quindi il dato che mi arriva dalla memoria
+                    s_prev2 <= signed(i_mem_data);
+                    current_state <= ASK_FOR_PREV1; -- e chiedo quindi di leggere prev1
+
+                -- per leggere prev1...
+                when ASK_FOR_PREV1 =>
+                    -- se non sono nelle prime 1 posizioni iniziali
+                    if s_W_index >= 1 then
+                        s_mem_en <= '1'; -- attivo la memoria
+                        s_mem_addr <= std_logic_vector(unsigned(s_first_W_addr) + s_W_index - 1); -- e chiedo prev1
+                        current_state <= READ_PREV1; -- e poi passo alla lettura del valore richiesto
+                    else -- altrimenti vuol dire che prev1 = 0
+                        s_mem_en <= '0';
+                        s_prev1 <= (others => '0'); -- setto prev1 a 0
+                        current_state <= ASK_FOR_NEXT1; -- e chiedo direttamente di leggere next1
+                    end if;
+
+                when READ_PREV1 =>
+                    -- immagazino quindi il dato che mi arriva dalla memoria
+                    s_prev1 <= signed(i_mem_data);
+                    current_state <= ASK_FOR_NEXT1; -- e chiedo quindi di leggere next1
+
+                -- per leggere next1...
+                when ASK_FOR_NEXT1 =>
+                    -- come sempre devo stare attento di non essere in una delle ultime 3 posizioni finali
+                    if s_W_index <= s_k-1 - 1 then
+                        s_mem_en <= '1'; -- allora attivo la memoria
+                        s_mem_addr <= std_logic_vector(unsigned(s_first_W_addr) + s_W_index + 1); -- e chiedo next1
+                        current_state <= READ_NEXT1; -- e passo allo stato per leggere next1
+                    else -- altrimenti vuol dire che next1 = 0
+                        s_mem_en <= '0'; -- non sto ad attivare la memoria
+                        s_next1 <= (others => '0'); -- setto next1 a 0
+                        -- e così sia per next2 che per next3
+                        s_next2 <= (others => '0');
+                        s_next3 <= (others => '0');
+                        current_state <= DONE; -- e finisco direttamente
+                    end if;
+
+                when READ_NEXT1 =>
+                    -- immagazino quindi il dato che mi arriva dalla memoria
+                    s_next1 <= signed(i_mem_data);
+                    current_state <= ASK_FOR_NEXT2; -- e chiedo di leggere next2
+
+                -- per leggere next2...
+                when ASK_FOR_NEXT2 =>
+                    -- come sempre devo stare attento di non essere in una delle ultime 3 posizioni finali
+                    if s_W_index <= s_k-1 - 2 then
+                        s_mem_en <= '1'; -- allora attivo la memoria
+                        s_mem_addr <= std_logic_vector(unsigned(s_first_W_addr) + s_W_index + 2); -- e chiedo next2
+                        current_state <= READ_NEXT2; -- e passo allo stato per leggere next1
+                    else -- altrimenti vuol dire che next2 = next3 = 0
+                        s_mem_en <= '0'; -- non sto ad attivare la memoria
+                        s_next2 <= (others => '0');
+                        s_next3 <= (others => '0');
+                        current_state <= DONE; -- e finisco direttamente
+                    end if;
+
+                when READ_NEXT2 =>
+                    -- immagazino quindi il dato che mi arriva dalla memoria
+                    s_next2 <= signed(i_mem_data);
+                    current_state <= ASK_FOR_NEXT3; -- e chiedo di leggere next3
+
+                -- per leggere next3...
+                when ASK_FOR_NEXT3 =>
+                    -- come sempre devo stare attento di non essere in una delle ultime 3 posizioni finali
+                    if s_W_index <= s_k-1 - 3 then
+                        s_mem_en <= '1'; -- allora attivo la memoria
+                        s_mem_addr <= std_logic_vector(unsigned(s_first_W_addr) + s_W_index + 3); -- e chiedo next3
+                        current_state <= READ_NEXT3; -- e passo allo stato per leggere next1
+                    else -- altrimenti vuol dire che next2 = next3 = 0
+                        s_mem_en <= '0'; -- non sto ad attivare la memoria
+                        s_next3 <= (others => '0');
+                        current_state <= DONE; -- e finisco direttamente
+                    end if;
+
+                when READ_NEXT3 =>
+                    -- immagazino quindi il dato che mi arriva dalla memoria
+                    s_next3 <= signed(i_mem_data);
+                    current_state <= DONE; -- e finalmente finisco
+
+                when DONE =>
+                    s_wru_done <= '1';
+                    if i_start = '0' then -- Aspetta che il Top Module de-asserisca start
+                        current_state <= IDLE;
+                    end if;
+
+                when others =>
+                    current_state <= IDLE; -- Stato di fallback
+            
+            end case;
+        end if;
+
+    end process;
+
+    -- e ora basta settare gli output coi valori dei segnali
+    o_prev3 <= s_prev3;
+    o_prev2 <= s_prev2;
+    o_prev1 <= s_prev1;
+    o_next1 <= s_next1;
+    o_next2 <= s_next2;
+    o_next3 <= s_next3;
+    -- e poi anche i segnali della memoria
+    o_wru_done <= s_wru_done;
+    o_mem_addr <= s_mem_addr;
+    o_mem_en <= s_mem_en;
+
+end architecture Behavioral;
+
+-- rispetto a com'era implementato prima questa modalità decrementa notevolmente l'efficienza!
+-- in pratica ogni volta che devo fare un calcolo devo leggere da zero ogni valore della window prima e dopo W_i
+-- prima si leggeva solo il valore successivo e si "shiftava" tutto a sinistra di una posizione
 
 
 
