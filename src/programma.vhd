@@ -28,7 +28,7 @@ architecture behavioral of project_reti_logiche is
         COMPUTE_ORDER_3, SHIFT_ORDER_3, READ_NEXT_2,
         COMPUTE_ORDER_5, SHIFT_ORDER_5, READ_NEXT_3, DONE, WAITING
     );
-    signal current_state : state_type := START;
+    signal next_state : state_type := START;
     signal state : state_type := WAITING;
 
     
@@ -64,10 +64,6 @@ architecture behavioral of project_reti_logiche is
     signal next1 : signed(7 downto 0)  := to_signed(0, 8);
     signal next2 : signed(7 downto 0)  := to_signed(0, 8);
     signal next3 : signed(7 downto 0)  := to_signed(0, 8);
-    
-    -- do we want the constants one byte long? or longer?
-    constant n_3 : unsigned(7 downto 0) := to_unsigned(12, 8);
-    constant n_5 : unsigned(7 downto 0) := to_unsigned(60, 8);
 
 begin
 
@@ -93,7 +89,7 @@ begin
         
 
         if i_rst = '1' then -- Reset asincrono 
-            current_state <= START;
+            next_state <= START;
             state <= WAITING;
             o_done <= '0';
             o_mem_en <= '1'; -- next clock time, we want to read data from memory, don''t we need to set en to 1 rn?
@@ -101,7 +97,6 @@ begin
             o_mem_we <= '0';
             o_mem_addr <= (others => '0');
             o_mem_data <= (others => '0');
-           -- mem_addr <= (others => '0');
             data_counter <= 0;
             coeff_counter <= 0;
             k1 <= (others => '0');
@@ -122,7 +117,7 @@ begin
                     k1 <= (others => '0');
                     k2 <= (others => '0');
                     s <= '0';
-                    current_state <= START;
+                    next_state <= START;
                     state <= WAITING;
                 end if;
             end if;
@@ -131,7 +126,7 @@ begin
                 case state is
                     
                     when WAITING =>
-                        state <= current_state; 
+                        state <= next_state; 
 
 
                     ---------------------------- FASE DI LETTURA METADATI -----------------------------------
@@ -148,7 +143,7 @@ begin
                         mem_init_addr <= i_add;
                         o_mem_data <= (others => '0');
                         state <= WAITING;
-                        current_state <= K1_STATE;
+                        next_state <= K1_STATE;
 
                     when K1_STATE =>
 
@@ -158,7 +153,7 @@ begin
                         k1 <= i_mem_data;
                         state <= WAITING;
 
-                        current_state <= K2_STATE;
+                        next_state <= K2_STATE;
 
                     when K2_STATE =>
 
@@ -168,13 +163,13 @@ begin
                         k2 <= i_mem_data;
                         state <= WAITING;
 
-                        current_state <= K_STATE;
+                        next_state <= K_STATE;
                         
                     when K_STATE =>
                         tmp_k(15 downto 8) := k1; 
                         tmp_k(7 downto 0) := k2;
                         k <= unsigned(tmp_k);
-                        current_state <= S_STATE;
+                        next_state <= S_STATE;
                         o_mem_addr <= std_logic_vector(unsigned(mem_init_addr) + 2);
                         o_mem_en <= '1';
                         o_mem_we <= '0';
@@ -198,7 +193,7 @@ begin
                         
                         
                         coeff_counter <= 0;
-                        current_state <= READ_COEFF;
+                        next_state <= READ_COEFF;
 
                     -- leggo i coefficienti basandomi sul segnale s e su un
                     -- un coeff_counter che si ricorda a che coefficiente sono
@@ -229,9 +224,9 @@ begin
                                 when 3 =>
                                     c_p2_3 <= signed(i_mem_data);
                                     o_mem_addr <= mem_w1_addr;
-                                    current_state <= FILTER_INIT;
+                                    next_state <= FILTER_INIT;
                                 when others => 
-                                    current_state <= DONE;
+                                    next_state <= DONE;
                            end case;
 
                         else -- filtro di ordine 5
@@ -261,9 +256,9 @@ begin
                                 when 5 =>
                                     c_p3_5 <= signed(i_mem_data);
                                     o_mem_addr <= mem_w1_addr;
-                                    current_state <= FILTER_INIT;
+                                    next_state <= FILTER_INIT;
                                 when others  => 
-                                    current_state <= DONE;
+                                    next_state <= DONE;
                             end case;
                         end if;
                                     
@@ -290,7 +285,7 @@ begin
 
                         o_mem_addr <= std_logic_vector(unsigned(mem_w1_addr) + 1); -- chiedo il successivo (next1)
 
-                        current_state <= FILTER_INIT_2;
+                        next_state <= FILTER_INIT_2;
 
                     when FILTER_INIT_2 =>
                         state <= WAITING;
@@ -300,9 +295,9 @@ begin
                         o_mem_we <= '0';
 
                         next1 <= signed(i_mem_data); -- memorizzo quello che ho chiesto prima (next1)
-                        o_mem_addr <= std_logic_vector(unsigned(mem_w1_addr) + 2); -- chiedo il successivo (nex2)
+                        o_mem_addr <= std_logic_vector(unsigned(mem_w1_addr) + 2); -- chiedo il successivo (next2)
 
-                        current_state <= FILTER_INIT_3;
+                        next_state <= FILTER_INIT_3;
 
                     when FILTER_INIT_3 =>
                         state <= WAITING;
@@ -314,11 +309,11 @@ begin
 
                         if s = '0' then
                             o_mem_en <= '0';
-                            current_state <= COMPUTE_ORDER_3; -- se sono in ordine 3 posso iniziare la computazione
+                            next_state <= COMPUTE_ORDER_3; -- se sono in ordine 3 posso iniziare la computazione
                         else
                             o_mem_en <= '1';
                             o_mem_addr <= std_logic_vector(unsigned(mem_w1_addr) + 3); -- altrimenti chiedo il successivo (next3)
-                            current_state <= FILTER_INIT_4;
+                            next_state <= FILTER_INIT_4;
                         end if;
                         
                     when FILTER_INIT_4 => 
@@ -330,7 +325,7 @@ begin
 
                         next3 <= signed(i_mem_data); -- memorizzo next3
 
-                        current_state <= COMPUTE_ORDER_5; -- inizio la computazione di ordine 5
+                        next_state <= COMPUTE_ORDER_5; -- inizio la computazione di ordine 5
 
 
                     --------------------------------------------------------------------------------------
@@ -370,10 +365,10 @@ begin
 
                         if data_counter = k - 1 then 
                             o_done <= '0';
-                            current_state <= DONE; -- ci penso su
+                            next_state <= DONE; -- ci penso su
                         else 
                             o_done <= '0';
-                            current_state <= SHIFT_ORDER_3;
+                            next_state <= SHIFT_ORDER_3;
                         end if;
 
                         data_counter <= data_counter + 1; --vedi sopra
@@ -396,11 +391,11 @@ begin
                         if data_counter > k - 3 then -- se sono alla fine 
                             next2 <= to_signed(0, 8); -- next2 è 0
                             o_mem_en <= '0';
-                            current_state <= COMPUTE_ORDER_3; -- in questo modo quello 0 viene shiftato in next1
+                            next_state <= COMPUTE_ORDER_3; -- in questo modo quello 0 viene shiftato in next1
                         else 
                             o_mem_en <= '1';    -- se non sono alla fine degli input (W) allora chiedo next2...
                             o_mem_addr <= std_logic_vector(unsigned(mem_w1_addr)+ 2 + to_unsigned(data_counter, 16));
-                            current_state <= READ_NEXT_2; -- e poi vado nello stato in cui viene letto 
+                            next_state <= READ_NEXT_2; -- e poi vado nello stato in cui viene letto 
                         end if;
 
                     when READ_NEXT_2 =>
@@ -410,7 +405,7 @@ begin
                         o_mem_en <= '0';
                         o_mem_we <= '0';
                         next2 <= signed(i_mem_data); -- memorizzo next2 (W successivo)
-                        current_state <= COMPUTE_ORDER_3; -- e continuo con la computazione
+                        next_state <= COMPUTE_ORDER_3; -- e continuo con la computazione
 
                     -- avrò poi il corrispettivo per l'ordine 5:
 
@@ -449,10 +444,10 @@ begin
 
                         if data_counter = k - 1 then 
                             o_done <= '0';
-                            current_state <= DONE; -- ci penso su dato che dopo dovrà gestire anche i prossimi calcoli
+                            next_state <= DONE; -- ci penso su dato che dopo dovrà gestire anche i prossimi calcoli
                         else 
                             o_done <= '0';
-                            current_state <= SHIFT_ORDER_5;
+                            next_state <= SHIFT_ORDER_5;
                         end if;
 
                         data_counter <= data_counter + 1; --vedi sopra
@@ -477,11 +472,11 @@ begin
                         if data_counter > k - 4 then -- se sono alla fine 
                             next3 <= to_signed(0, 8); -- next3 è 0
                             o_mem_en <= '0';
-                            current_state <= COMPUTE_ORDER_5; -- in questo modo quello 0 viene shiftato in next2 e next1
+                            next_state <= COMPUTE_ORDER_5; -- in questo modo quello 0 viene shiftato in next2 e next1
                         else 
                             o_mem_en <= '1';    -- se non sono alla fine degli input (W) allora chiedo next3...
                             o_mem_addr <= std_logic_vector(unsigned(mem_w1_addr) + 3 + to_unsigned(data_counter, 16)); -- chiedo next3
-                            current_state <= READ_NEXT_3; -- e poi vado nello stato in cui viene letto 
+                            next_state <= READ_NEXT_3; -- e poi vado nello stato in cui viene letto 
                         end if;
 
                     when READ_NEXT_3 =>
@@ -491,7 +486,7 @@ begin
                         o_mem_en <= '0';
                         o_mem_we <= '0';
                         next3 <= signed(i_mem_data); -- memorizzo next3 (W successivo)
-                        current_state <= COMPUTE_ORDER_5; -- e continuo con la computazione
+                        next_state <= COMPUTE_ORDER_5; -- e continuo con la computazione
 
                     --------------------------------------------------------------------------------------
 
@@ -512,7 +507,7 @@ begin
                         o_mem_en <= '0';
                         o_mem_we <= '0';
                         o_done <= '0';
-                       current_state <= START;
+                       next_state <= START;
             
                 end case;
             end if;
