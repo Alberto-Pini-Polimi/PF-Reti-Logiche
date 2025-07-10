@@ -29,7 +29,7 @@
     commentstyle=\color{green!50!black}, % Colore per i commenti
     stringstyle=\color{orange!70!black}, % Colore per le stringhe
     literate={_}{{\_}}1,          % Permette l'underscore nel codice VHDL
-    morekeywords={entity, is, port, end, architecture, behavioral, signal, std_logic, std_logic_vector, in, out, process, begin, if, else, elsif, then, end, loop, variable, constant} % Aggiungi altre parole chiave VHDL se necessario
+    morekeywords={entity, is, port, end, architecture, behavioral, signal, std_logic, std_logic_vector, in, out, process, begin, if, else, elsif, then, end, loop, variable, to_signed , constant, resize} % Aggiungi altre parole chiave VHDL se necessario
 }
 
 % --- Personalizzazione della pagina del titolo ---
@@ -292,26 +292,45 @@ Questo ciclo si ripete per tutti i $K$ valori della sequenza, dopodiché il modu
 
 Per questo progetto abbiamo creato un unico modulo (\texttt{project\_reti\_logiche}) che agisce ovviamente da \texttt{top\_module}. Al suo interno è presente un unico processo contenente tutta la logica dell'FPGA...
 
-\subsection{FSM e Descrizione Stati}
+\subsection{FSM e Descrizione Stati }
+Ogni transizione da uno stato ad un altro nella macchina a stati finiti, include una transizione intermedia ad uno stato di "attesa", necessario per permettere ai testbench di interagire con la memoria e di inviare al successivo ciclo di clock i corretti segnali richiesti dal modulo.
 
-Immagine FSM ...
+Prima della transizione allo stato WAITING, sarà computato e modificato il segnale \texttt{next\_state}, che rappresenta dunque il prossimo stato. 
+ Figura \ref{fig:png}
+
+\noindent Inoltre il segnale \texttt{i\_rst} agisce come segnale asincrono. Ciò vuol dire che, indipendentemente dal segnale di clock, l'attivazione di \texttt{i\_rst} porta a:
+\begin{itemize}
+    \item reset di ogni segnale interno 
+    \item settaggio di \texttt{state <= WAITING} e di \texttt{next\_state <= START} 
+\end{itemize}
+
+Di seguito i diagrammi del cambio di stato \ref{WAITING_STATE_FSM} e della FSM principale \ref{mainFSM}.
+
+\newpage
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{resources/basicSchema.png}
+    \caption{Generico cambio di stato con segnale di reset}
+    \label{WAITING_STATE_FSM}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{resources/mainFSM.png}
+    \caption{Diagramma generale FMS}
+    \label{mainFSM}
+\end{figure}
 
 \subsection{Segnali e Variabili}
 
 Questi segnali sono utilizzati per la gestione interna dei dati e il controllo del flusso all'interno del modulo:
 \begin{itemize}
-    \item \textbf{segnali per gli stati}:
+    \item \textbf{Segnali per gli stati}:
     \begin{itemize}
         \item \texttt{next\_state}: Segnale di tipo \texttt{state\_type} (stati descritti precedentemente) che memorizza lo stato futuro a cui la FSM transirà nel prossimo ciclo di clock.
         \item \texttt{state}: Segnale di tipo \texttt{state\_type} che rappresenta lo stato corrente in cui si trova la FSM.
     \end{itemize} 
     
-    \item \texttt{mem\_w1\_addr}: Indirizzo a 16 bit che punta all'inizio della sequenza di dati $W$ da filtrare in memoria. È calcolato sommando l'indirizzo base \texttt{i\_add} e l'offset dei metadati iniziali (ovvero 17 = 3 byte per $K$ e $S$ + 14 byte per i coefficienti).
-    \item \texttt{mem\_init\_addr}: Indirizzo a 16 bit che memorizza l'indirizzo di partenza \texttt{i\_add} fornito all'inizio dell'esecuzione, usato come base per accedere ai metadati.
-    \item \texttt{k1}, \texttt{k2}: Segnali a 8 bit che memorizzano i due byte letti dalla memoria che insieme formano la lunghezza $K$ della sequenza di input.
-    \item \texttt{k}: Segnale a 16 bit (\texttt{unsigned}) che memorizza la lunghezza effettiva della sequenza di dati $W$ da elaborare.
-    \item \texttt{s}: Segnale a 1 bit (\texttt{std\_logic}) che indica il tipo di filtro: \texttt{0} per l'ordine 3, \texttt{1} per l'ordine 5.
-
     \item \textbf{Contatori interni}: 
     \begin{itemize}
         \item \texttt{data\_counter}: Contatore intero che tiene traccia del numero di parole $W$ elaborate e funge da indice per l'accesso ai dati in input e la scrittura dei risultati in output.
@@ -324,8 +343,6 @@ Questi segnali sono utilizzati per la gestione interna dei dati e il controllo d
         \item \texttt{c\_n3\_5}, \texttt{c\_n2\_5}, \texttt{c\_n1\_5}, \texttt{c\_p1\_5}, \texttt{c\_p2\_5}, \texttt{c\_p3\_5}: Segnali a 8 bit (\texttt{signed}) idem a prima ma per il filtro di ordine 5.
     \end{itemize}
 
-
-
     \item \textbf{Segnali della "sliding window"}:
     \begin{itemize}
         \item \texttt{prev3}, \texttt{prev2}, \texttt{prev1}: Segnali a 8 bit (\texttt{signed}) che contengono i valori di input $W$ precedenti all'attuale valore \texttt{current\_W} nel buffer di scorrimento.
@@ -336,7 +353,11 @@ Questi segnali sono utilizzati per la gestione interna dei dati e il controllo d
 
     \item \textbf{Altri segnali interni}:
     \begin{itemize}
-        \item 
+        \item \texttt{mem\_w1\_addr}: Indirizzo a 16 bit che punta all'inizio della sequenza di dati $W$ da filtrare in memoria. È calcolato sommando l'indirizzo base \texttt{i\_add} e l'offset dei metadati iniziali (ovvero 17 = 3 byte per $K$ e $S$ + 14 byte per i coefficienti).
+        \item \texttt{mem\_init\_addr}: Indirizzo a 16 bit che memorizza l'indirizzo di partenza \texttt{i\_add} fornito all'inizio dell'esecuzione, usato come base per accedere ai metadati.
+        \item \texttt{k1}, \texttt{k2}: Segnali a 8 bit che memorizzano i due byte letti dalla memoria che insieme formano la lunghezza $K$ della sequenza di input.
+        \item \texttt{k}: Segnale a 16 bit (\texttt{unsigned}) che memorizza la lunghezza effettiva della sequenza di dati $W$ da elaborare.
+        \item \texttt{s}: Segnale a 1 bit (\texttt{std\_logic}) che indica il tipo di filtro: \texttt{0} per l'ordine 3, \texttt{1} per l'ordine 5.
     \end{itemize}
     
 \end{itemize}
@@ -350,11 +371,42 @@ Questi segnali sono utilizzati per la gestione interna dei dati e il controllo d
     \item \texttt{tmp\_sum}: Variabile a 32 bit (\texttt{signed}) che accumula la somma totale dei prodotti parziali dei coefficienti e dei valori di input.
     \item \texttt{tmp\_res}: Variabile a 32 bit (\texttt{signed}) che contiene il risultato del filtraggio dopo la normalizzazione, prima dell'applicazione della saturazione e della conversione a 8 bit.
 \end{itemize}
+In particolare vengono utilizzate in questo modo nello stato di \texttt{COMPUTE\_ORDER\_3}
+
+\begin{figure}[h!]
+    \centering
+    \begin{lstlisting}[caption=Calcolo mediante variabili temporanee]
+tmp_n2 := resize(c_n2_3, 16) * resize(prev2, 16);
+tmp_n1 := resize(c_n1_3, 16) * resize(prev1, 16);
+tmp_p1 := resize(c_p1_3, 16) * resize(next1, 16);
+tmp_p2 := resize(c_p2_3, 16) * resize(next2, 16);
+
+tmp_sum := tmp_n2 + tmp_n1 + tmp_p1 + tmp_p2;
+tmp_res := shift_right (tmp_sum, 4) + shift_right (tmp_sum, 6) 
+         + shift_right (tmp_sum, 8) + shift_right (tmp_sum, 10);
+if tmp_sum < to_signed(0, 32) then
+   tmp_res := tmp_res + 4;
+end if;
+    \end{lstlisting}
+\end{figure}
+
+
+
 
 \section{Risultati Sperimentali}
 
+\subsection{Introduzione}
+Il modulo è stato sottoposto ai seguenti TestBench, superandoli tutti fino alla fase di simulazione post sintesi functional.
+Per il testbench 2345 è stata effettuata anche la 
+
+tabella TB ...
+
+I testbench a cui si fa riferimento nella tabella sono contenuti nella directory \texttt{TestBenches} nella cartella root della repo.
+
 \subsection{Sintesi}
 risultati della sintesi... con screen shot
+
+\subsection{Post-Sintesi}
 
 \subsection{TestBench}
 
@@ -364,5 +416,7 @@ risultati della sintesi... con screen shot
 
 \section{Conclusioni}
 
+
+link alla repo...
 
 \end{document}
