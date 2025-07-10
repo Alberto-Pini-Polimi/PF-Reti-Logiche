@@ -1,0 +1,17 @@
+
+Esporta in Fogli
+Tabella 1: Report di Utilizzo delle Risorse FPGA
+
+Analisi Dettagliata:
+
+LUT (Look-Up Tables): Sono state utilizzate 1608 LUT su 41000 disponibili, corrispondenti a un'occupazione del 3.92%. Questo basso valore indica che la logica combinatoria implementata dal design è di dimensioni molto contenute rispetto alla capacità totale del dispositivo.
+
+FF (Flip-Flops): Per la logica sequenziale, sono stati utilizzati 302 Flip-Flops su 82000, con un'percentuale di utilizzo dello 0.37%. Anche in questo caso, l'utilizzo estremamente ridotto dei Flip-Flops conferma la moderata complessità sequenziale del design.
+
+IO (Input/Output Pins): Il design impiega 54 pin di I/O su 300 disponibili, risultando in un'occupazione del 18.00%. Questa percentuale riflette il numero di interfacce esterne richieste dal componente e rientra ampiamente nelle capacità del dispositivo.
+
+BUFG (Global Buffers): È stato utilizzato 1 Global Buffer su 32 disponibili, pari al 3.12%. L'utilizzo di un singolo BUFG è una pratica comune per distribuire il clock principale del sistema con minima distorsione, garantendo un'ottima integrità del segnale di clock a livello di chip.
+
+Conclusioni sull'Utilizzo:
+
+I dati del report di utilizzo dimostrano che il componente VHDL sviluppato è estremamente efficiente in termini di consumo di risorse hardware. Le percentuali di utilizzo per LUT e FF sono marginali, indicando che il design è molto leggero e lascia una vasta maggioranza delle risorse logiche dell'FPGA non utilizzate. Questo significa che il design non presenta alcun problema di fitting sul dispositivo target e offre un'enorme flessibilità per future espansioni o l'integrazione di ulteriori funzionalità sul medesimo chip. La bassa occupazione delle risorse evidenzia inoltre la possibilità di targettare dispositivi FPGA di dimensioni inferiori, qualora i requisiti di costo o dimensioni fossero stringenti.

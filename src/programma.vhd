@@ -94,6 +94,7 @@ begin
 
         if i_rst = '1' then -- Reset asincrono 
             current_state <= START;
+            state <= WAITING;
             o_done <= '0';
             o_mem_en <= '1'; -- next clock time, we want to read data from memory, don''t we need to set en to 1 rn?
             
