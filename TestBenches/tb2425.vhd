@@ -134,7 +134,7 @@ begin
         exc_o_mem_we
     )
     begin
-        -- This is necessary for the testbench to work: we swap the memory
+        -- we swap the memory
         -- signals from the component to the testbench when needed.
  
         -- aggiorno i segnali tb quando la mem è controllata dal tb
@@ -151,7 +151,7 @@ begin
         end if;
     end process;
  
-    -- This process provides the correct scenario on the signal controlled by the TB
+   
     create_scenario : process
     begin
         wait for 50 ns;
