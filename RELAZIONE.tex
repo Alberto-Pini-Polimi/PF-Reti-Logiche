@@ -8,7 +8,9 @@
 \usepackage{amsmath}        % Per equazioni matematiche (se necessarie)
 \usepackage{graphicx}       % Per includere immagini (se necessarie)
 \usepackage{geometry}       % Per gestire i margini della pagina
+\usepackage{float}
 \geometry{a4paper, total={16cm,24cm}, left=2.5cm, top=2.5cm} % Esempio di impostazione margini
+\usepackage[colorlinks=true, linkcolor=black, urlcolor=cyan, citecolor=red]{hyperref}
 
 % --- Configurazione per VHDL con listings ---
 \lstset{
@@ -224,8 +226,8 @@ Il modulo ha i seguenti segnali:
 
 In qualsiasi momento \texttt{RESET} può passare da $0 \to 1$ e, in modo asincrono (quindi indipendentemente dal segnale \texttt{i\_clk}), il componente deve essere in grado di:
 \begin{enumerate}
-    \item fermare l'esecuzione
-    \item ...
+    \item fermare l'esecuzione, settando gli stati appropriati
+    \item inizializzare tutti i segnali interni, specialmente i contatori
 \end{enumerate}
 
 \subsection{Lavorare con la Memoria}\label{subsubsec:memoria}
@@ -265,8 +267,8 @@ La comunicazione con la memoria esterna, gestita a livello del Top Module, avvie
 
 \begin{figure}[h!]
     \centering
+    \caption{Diagramma di esempio di funzionamento}
     \includegraphics[width=0.8\textwidth]{resources/esempio.png}
-    \caption{Diagramma di esempio}
     \label{fig:png}
 \end{figure}
 
@@ -304,20 +306,19 @@ Prima della transizione allo stato WAITING, sarà computato e modificato il segn
     \item settaggio di \texttt{state <= WAITING} e di \texttt{next\_state <= START} 
 \end{itemize}
 
-Di seguito i diagrammi del cambio di stato \ref{WAITING_STATE_FSM} e della FSM principale \ref{mainFSM}.
+Di seguito i diagrammi del cambio di stato (Figura \ref{WAITING_STATE_FSM}) e della FSM principale (Figura \ref{mainFSM}).
 
-\newpage
-\begin{figure}[h!]
+\begin{figure}[f]
     \centering
-    \includegraphics[width=0.8\textwidth]{resources/basicSchema.png}
     \caption{Generico cambio di stato con segnale di reset}
+    \includegraphics[width=0.8\textwidth]{resources/basicSchema.png}
     \label{WAITING_STATE_FSM}
 \end{figure}
 
-\begin{figure}[h!]
+\begin{figure}[f]
     \centering
-    \includegraphics[width=0.8\textwidth]{resources/mainFSM.png}
     \caption{Diagramma generale FMS}
+    \includegraphics[width=0.8\textwidth]{resources/mainFSM.png}
     \label{mainFSM}
 \end{figure}
 
@@ -395,20 +396,241 @@ end if;
 
 \section{Risultati Sperimentali}
 
-\subsection{Introduzione}
-Il modulo è stato sottoposto ai seguenti TestBench, superandoli tutti fino alla fase di simulazione post sintesi functional.
-Per il testbench 2345 è stata effettuata anche la 
-
-tabella TB ...
-
-I testbench a cui si fa riferimento nella tabella sono contenuti nella directory \texttt{TestBenches} nella cartella root della repo.
-
 \subsection{Sintesi}
-risultati della sintesi... con screen shot
 
-\subsection{Post-Sintesi}
+La sintesi è il processo che traduce la descrizione hardware (il programma VHDL in questo caso) in un elenco di come i blocchi base dell'FPGA (le 'primitive') devono essere collegati tra loro.
+
+\subsubsection{Analisi del Report di Sintesi di Vivado}
+\label{ssec:analisi_sintesi}
+
+Il processo di sintesi è stato eseguito con successo, come indicato dalle linee finali del report:
+\begin{lstlisting}[caption={Messaggi di successo della sintesi}, label={lst:sintesi_successo}, breaklines=true]
+Synthesis finished with 0 errors, 0 critical warnings and 0 warnings.
+synth_design completed successfully
+\end{lstlisting}
+Questo conferma che la descrizione hardware è sintatticamente e semanticamente corretta per la sintesi e che non ci sono stati problemi bloccanti durante il processo.
+
+\noindent Sintesi eseguita con \textit{Vivado v2015.4 (64-bit)} su un sistema Linux. E il dispositivo FPGA di destinazione è stato specificato come \texttt{xc7k70tfbg676-1}.
+
+\noindent Nel report è presente un avviso significativo:
+
+\begin{lstlisting}[label={lst:sintesi_successo}, breaklines=true]
+WARNING: [Netlist 29-101] Netlist 'project_reti_logiche' is not ideal for floorplanning, since the cellview 'project_reti_logiche' contains a large number of primitives. Please consider enabling hierarchy in synthesis if you want to do floorplanning.
+\end{lstlisting}
+
+\noindent Questo warning suggerisce che il design, pur essendo funzionalmente corretto, potrebbe non essere ottimale per il \texttt{floorplanning} (la disposizione fisica dei blocchi sul chip) a causa di un'elevata "piattezza" (flattening). Visualmente l'immagine dello schema delle primitive mostra proprio questa mancanza di astrazione e gerarchia:
+
+\begin{figure}[h!]
+    \centering
+    \caption{Schematic del componente}
+    \includegraphics[width=0.8\textwidth]{resources/Screenshot From 2025-07-11 10-06-58.png}
+    \label{schematic}
+\end{figure}
+
+Inoltre, sono presenti diversi avvisi relativi al mancato mappaggio di alcune ROM (Read-Only Memory) a blocchi di RAM dedicati (`BRAM`) a causa di una dimensione dell'indirizzo superiore al massimo supportato (32 bit vs 25 bit). Questo implica che le ROM in questione sono state implementate utilizzando logica combinatoria (LUTs) invece di risorse BRAM più efficienti, il che potrebbe incidere sull'utilizzo delle risorse logiche e sulle performance.
+\begin{lstlisting}[label={lst:sintesi_successo}, breaklines=true]
+INFO: [Synth 8-5545] ROM "o_mem_addr" won't be mapped to RAM because address size (32) is larger than maximum supported(25)
+\end{lstlisting}
+Questo è ripetuto per diverse istanze di ROM (\texttt{o\_mem\_addr}, \texttt{c\_n2\_3}, \texttt{c\_n1\_3}, \texttt{c\_p1\_3}, \texttt{c\_p2\_3}, \texttt{c\_n3\_5}, \texttt{c\_n2\_5}, \texttt{c\_n1\_5}, \texttt{c\_p1\_5}, \texttt{c\_p2\_5}, \texttt{c\_p3\_5}).
+
+\subsubsection{Report di Utilizzazione delle Risorse}
+\label{ssec:report_utilizzazione}
+
+Il report di utilizzazione fornisce una panoramica dettagliata delle risorse logiche e fisiche usate dall'FPGA dopo la sintesi.
+
+La Tabella \ref{tab:slice_logic_utilization} riassume l'utilizzo delle risorse fondamentali all'interno delle Slice Logiche (quindi i blocchetti logici configurabili all'interno dell'FPGA).
+
+\begin{table}[H]
+    \centering
+    \caption{Riepilogo Utilizzo Logica Slice}
+    \label{tab:slice_logic_utilization}
+    \begin{tabular}{|l|r|r|r|r|}
+        \hline
+        \textbf{Tipo di Risorsa} & \textbf{Utilizzate} & \textbf{Disponibili} & \textbf{Util\%} \\
+        \hline
+        Slice LUTs & 1608 & 41000 & 3.92\% \\
+        \quad LUT as Logic & 1608 & 41000 & 3.92\% \\
+        \quad LUT as Memory & 0 & 13400 & 0.00\% \\
+        Slice Registers & 302 & 82000 & 0.37\% \\
+        \quad Register as Flip Flop & 302 & 82000 & 0.37\% \\
+        \quad Register as Latch & 0 & 82000 & 0.00\% \\
+        F7 Muxes & 31 & 20500 & 0.15\% \\
+        F8 Muxes & 0 & 10250 & 0.00\% \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Da notare che il componente vero e proprio utilizza una percentuale molto bassa delle risorse logiche di base del chip FPGA (meno del 4\% di LUTs e meno dell'1\% di registri).
+
+La distribuzione dei registri per tipo (sincroni/asincroni, con/senza Clock Enable, Set/Reset) è fornita nella Tabella \ref{tab:registers_by_type}.
+
+\begin{table}[H]
+    \centering
+    \caption{Distribuzione dei Registri per Tipo}
+    \label{tab:registers_by_type}
+    \begin{tabular}{|r|c|c|c|l|}
+        \hline
+        \textbf{Totale} & \textbf{Clock Enable} & \textbf{Synchronous} & \textbf{Asynchronous} & \textbf{Descrizione} \\
+        \hline
+        3 & Yes & - & Set & Registri con CE e Set Asincrono \\
+        115 & Yes & - & Reset & Registri con CE e Reset Asincrono \\
+        184 & Yes & Reset & - & Registri con CE e Reset Sincrono \\
+        \hline
+        \textbf{302} & \multicolumn{4}{|l|}{\textbf{Totale Registri Utilizzati}} \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \caption{Utilizzo Risorse di Memoria (BRAM)}
+    \label{tab:memory_utilization}
+    \begin{tabular}{|l|r|r|r|}
+        \hline
+        \textbf{Tipo di Memoria} & \textbf{Utilizzate} & \textbf{Disponibili} & \textbf{Util\%} \\
+        \hline
+        Block RAM Tile & 0 & 135 & 0.00\% \\
+        \quad RAMB36/FIFO* & 0 & 135 & 0.00\% \\
+        \quad RAMB18 & 0 & 270 & 0.00\% \\
+        \hline
+    \end{tabular}
+\end{table}
+
+L'assenza di utilizzo di BRAM è in linea con i warning di sintesi relativi al mancato mappaggio delle ROM a causa delle dimensioni dell'indirizzo.
+
+\begin{table}[H]
+    \centering
+    \caption{Utilizzo Risorse di I/O}
+    \label{tab:io_utilization}
+    \begin{tabular}{|l|r|r|r|}
+        \hline
+        \textbf{Tipo di Risorsa I/O} & \textbf{Utilizzate} & \textbf{Disponibili} & \textbf{Util\%} \\
+        \hline
+        Bonded IOB & 54 & 300 & 18.00\% \\
+        \hline
+        % Puoi aggiungere altre righe qui se sono utilizzate e pertinenti
+    \end{tabular}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \caption{Utilizzo Risorse di Clocking}
+    \label{tab:clocking_utilization}
+    \begin{tabular}{|l|r|r|r|}
+        \hline
+        \textbf{Tipo di Risorsa Clocking} & \textbf{Utilizzate} & \textbf{Disponibili} & \textbf{Util\%} \\
+        \hline
+        BUFGCTRL & 1 & 32 & 3.13\% \\
+        \hline
+    \end{tabular}
+\end{table}
+
+I 54 pin di I/O utilizzati rappresentano una percentuale moderata dei pin disponibili (18\%). È utilizzato un solo Global Buffer per la gestione del clock.
+
+La Tabella \ref{tab:primitives_summary} ripresenta un riepilogo delle primitive elementari effettivamente instanziate nel design dopo la sintesi, come già visto nel report di sintesi, con il conteggio specifico per ciascun tipo.
+
+\begin{table}[H]
+    \centering
+    \caption{Riepilogo delle Primitive Utilizzate}
+    \label{tab:primitives_summary}
+    \begin{tabular}{|l|l|r|}
+        \hline
+        \textbf{Nome Primitiva} & \textbf{Categoria Funzionale} & \textbf{Conteggio} \\
+        \hline
+        LUT6 & LUT & 461 \\
+        LUT2 & LUT & 460 \\
+        LUT1 & LUT & 382 \\
+        LUT4 & LUT & 352 \\
+        CARRY4 & CarryLogic & 306 \\
+        LUT3 & LUT & 205 \\
+        FDRE & Flop \& Latch & 184 \\
+        LUT5 & LUT & 175 \\
+        FDCE & Flop \& Latch & 115 \\
+        MUXF7 & MuxFx & 31 \\
+        OBUF & IO & 27 \\
+        IBUF & IO & 27 \\
+        FDPE & Flop \& Latch & 3 \\
+        BUFG & Clock & 1 \\
+        \hline
+        \textbf{Totale LUTs} & \multicolumn{2}{r|}{\textbf{2035}} \\
+        \textbf{Totale Flip-Flop} & \multicolumn{2}{r|}{\textbf{302}} \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Il design è stato implementato con un utilizzo relativamente basso delle risorse logiche programmabili della FPGA (LUTs e Flip-Flop).
+
+In sintesi, i risultati di utilizzo principali sono riportati dalla tabella \ref{tab:resource_utilization_summary}
+
+\begin{table}[H]
+    \centering
+    \caption{Riepilogo Utilizzo delle Risorse della FPGA}
+    \label{tab:resource_utilization_summary}
+    \begin{tabular}{|l|r|r|r|}
+        \hline
+        \textbf{Risorsa} & \textbf{Utilizzo} & \textbf{Disponibile} & \textbf{Utilizzo \%} \\
+        \hline
+        LUT & 1608 & 41000 & 3.92 \\
+        FF & 302 & 82000 & 0.37 \\
+        IO & 54 & 300 & 18.00 \\
+        BUFG & 1 & 32 & 3.12 \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\subsubsection{Report Implementazione TODO}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{reports/image.png}
+    \caption{Report performance}
+    \label{performance_report}
+\end{figure}
+
+
+
+\subsection{Post-Sintesi ? forse si può anche skippare}
 
 \subsection{TestBench}
+
+Il modulo è stato sottoposto ai seguenti TestBench, superandoli tutti fino alla fase di simulazione post sintesi functional.
+Per il testbench 2345 è stata effettuata anche la timing.
+
+\begin{table}[H]
+    \centering
+    \caption{Riepilogo dei Risultati delle Simulazioni dei Testbench}
+    \label{tab:testbench_results}
+    \begin{tabular}{|l|c|c|c|l|}
+        \hline
+        \textbf{Nome Testbench} & \textbf{Behavioral} & \textbf{Functional} & \textbf{Timing} & \textbf{Note} \\
+        \hline
+        \multicolumn{5}{|l|}{\textbf{Default}} \\
+        \hline
+        tb2425.vhd & OK & OK & N.D. & \\
+        \hline
+        \multicolumn{5}{|l|}{\textbf{Generati con filtro singolo}} \\
+        \hline
+        tb\_3\_1500.vhd & OK & OK & FAIL & \\
+        tb\_3\_32000.vhd & OK & OK & FAIL. & \\
+        tb\_5\_24.vhd & OK & OK & FAIL & \\
+        tb\_5\_1500.vhd & OK & OK & FAIL & \\
+        tb\_5\_32000.vhd & OK & OK & FAIL & \\
+        \hline
+        \multicolumn{5}{|l|}{\textbf{Corner Cases}} \\
+        \hline
+        TB\_Intermedi\_Negativi.vhdl & OK & OK & OK & \\
+        TB\_Intermedi\_Positivi.vhdl & OK & OK & OK & \\
+        tb\_ordine\_3\_con\_C1\_e\_C7\_non\_0.vhd & OK & OK & OK & \\
+        \hline
+        \multicolumn{5}{|l|}{\textbf{Altri}} \\
+        \hline
+        tb\_new.vhd & OK & OK & FAIL & \\
+        TestBench\_mark2.vhd & OK & OK & FAIL & \\
+        \hline
+    \end{tabular}
+\end{table}
+
+I testbench a cui si fa riferimento nella tabella sono contenuti nella directory \texttt{TestBenches} nella cartella root della repo.
 
 \subsubsection{Risultati TB standard}
 
