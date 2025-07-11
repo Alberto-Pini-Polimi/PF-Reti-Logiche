@@ -11,6 +11,7 @@
 \usepackage{float}
 \geometry{a4paper, total={16cm,24cm}, left=2.5cm, top=2.5cm} % Esempio di impostazione margini
 \usepackage[colorlinks=true, linkcolor=black, urlcolor=cyan, citecolor=red]{hyperref}
+\usepackage{multirow}
 
 % --- Configurazione per VHDL con listings ---
 \lstset{
@@ -54,8 +55,8 @@
 \makeatother
 
 % --- Informazioni del documento ---
-\title{\Huge Prova Finale di Reti Logiche \\ \Large Anno 2024/2025}
-\author{Alberto Pini e Davide Redaelli\\(212524 - 215263)}
+\title{\Huge Prova Finale di Reti Logiche \\ \Large Anno Accademico 2024 - 2025}
+\author{Alberto Pini e Davide Redaelli\\10823873 - ?\\212524 - 215263}
 \date{\today} % O puoi specificare una data fissa, es: \date{5 Luglio 2025}
 
 \begin{document}
@@ -81,7 +82,7 @@
 
 \section{Introduzione}
 
-In questo progetto di Reti Logiche ci è stato chiesto di sviluppare un programma in VHDL che sia in grado di programmare un FPGA. 
+Il presente progetto di Reti Logiche ha avuto come obiettivo lo sviluppo di un componente hardware, descritto in VHDL e destinato alla sintesi su FPGA, in grado di implementare le funzionalità richieste dalla specifica.
 
 \section{Analisi Specifica}
 L'FPGA da programmare lavora con una memoria costituita da metadati iniziali e una sequenza di $K$ parole, ciascuna referenziata con $W_i$. Il Chip dovrà "iterare" la memoria mentre calcola e scrive i risultati.
@@ -124,18 +125,18 @@ end project_reti_logiche;
     \item \texttt{i\_clk} clock di sistema
     \item \texttt{i\_rst} segnale di reset asincrono
     \item \texttt{i\_start} segnale che indica la fine della scrittura in memoria degli input da parte del testbench e, conseguentemente, la possibilità di iniziare il calcolo da parte del chip
-    \item \texttt{i\_add} $[15-0]$ address della memoria da cui leggere il primo bit
+    \item \texttt{i\_add} $[15-0]$ address della memoria da cui leggere il primo byte di metadati
     \item \texttt{o\_done} segnale da alzare una volta che si è finito di scrivere l'ultimo risultato
 \end{itemize}
 
 Le altre porte sono per la lettura e scrittura della memoria
 
 \begin{itemize}
-    \item \texttt{o\_mem\_en} segnale per attivare la memoria in lettura e potenzialmente anche in lettura
-    \item \texttt{o\_mem\_we} segnale per attivare la modalità di lettura della memoria
+    \item \texttt{o\_mem\_en} segnale per attivare la memoria sia in lettura che potenzialmente anche in scrittura
+    \item \texttt{o\_mem\_we} segnale per attivare la modalità scrittura della memoria
     \item \texttt{o\_mem\_addr} $[15-0]$ address della memoria su cui il chip vuole lavorare (sia in lettura che scrittura)
-    \item \texttt{i\_mem\_data} $[7-0]$ segnale fornito dal chip alla memoria per memorizzare il valore in \texttt{o\_mem\_addr} (con $\texttt{o\_mem\_we} = \texttt{o\_mem\_en} = 1$)
-    \item \texttt{o\_mem\_data} $[7-0]$ segnale fornito al chip dalla memoria corrispondente al valore risultante della precedente lettura (con $\texttt{o\_mem\_we} = 0$ e $\texttt{o\_mem\_en} = 1$)
+    \item \texttt{o\_mem\_data} $[7-0]$ segnale fornito dal chip alla memoria per memorizzare il valore in \texttt{o\_mem\_addr} (con $\texttt{o\_mem\_we} = \texttt{o\_mem\_en} = 1$)
+    \item \texttt{i\_mem\_data} $[7-0]$ segnale fornito al chip dalla memoria corrispondente al valore risultante della precedente lettura (con $\texttt{o\_mem\_we} = 0$ e $\texttt{o\_mem\_en} = 1$)
 \end{itemize}
 
 Queste porte sono meglio approfondite nella sezione dedicata \ref{subsubsec:memoria}.
@@ -219,7 +220,7 @@ Il modulo ha i seguenti segnali:
     \item All'avvio \texttt{RESET=1} e \texttt{DONE=0}.
     \item Quando \texttt{RESET} torna a \texttt{0}, il modulo attende che, quando il \texttt{CLOCK} sale ad $1$, \texttt{START} sia pari a $1$.
     \item Legge i dati da memoria, esegue il filtraggio e scrive i risultati.
-    \item Alla fine dell'elaborazione, alza \texttt{DONE=1} per segnalare al testbench che il moduolo ha finito il suo lavoro.
+    \item Alla fine dell'elaborazione, alza \texttt{DONE=1} per segnalare al testbench che il modulo ha finito il suo lavoro.
     \item Il modulo attende che \texttt{START} torni a \texttt{0} prima di una nuova fase di computazione.
     \item Infine il modulo setta \texttt{DONE=0} per segnalare al testbench che è pronto a ricevere un nuovo \texttt{START=1}.
 \end{enumerate}
@@ -269,7 +270,7 @@ La comunicazione con la memoria esterna, gestita a livello del Top Module, avvie
     \centering
     \caption{Diagramma di esempio di funzionamento}
     \includegraphics[width=0.8\textwidth]{resources/esempio.png}
-    \label{fig:png}
+    \label{diagrammaDiEsempio}
 \end{figure}
 
 Per illustrare il processo di filtraggio differenziale, consideriamo l'applicazione di un filtro di ordine 3 a una sequenza generica di dati. Si assume che il modulo abbia già letto dalla memoria i parametri iniziali, ovvero la lunghezza della sequenza $K$, il bit di selezione del filtro $S$ (che indica l'uso di un filtro di ordine 3), e i coefficienti del filtro. La sequenza dei coefficienti sarà composta da $C_{-3}, C_{-2}, C_{-1}, C_1, C_2 C_3$ (letti in base all'ordine del filtro) e il valore di normalizzazione $n$. L'indirizzo di inizio dei dati in input è $\text{ADD}_W$, e l'indirizzo dove verranno scritti i risultati è $\text{ADD}_R$.
@@ -292,7 +293,7 @@ Questo ciclo si ripete per tutti i $K$ valori della sequenza, dopodiché il modu
 
 \section{Architettura del Componente}
 
-Per questo progetto abbiamo creato un unico modulo (\texttt{project\_reti\_logiche}) che agisce ovviamente da \texttt{top\_module}. Al suo interno è presente un unico processo contenente tutta la logica dell'FPGA...
+Per questo progetto abbiamo creato un unico modulo (\texttt{project\_reti\_logiche}) che agisce ovviamente da \texttt{top\_module}. Al suo interno è presente un unico processo sequenziale contenente tutta la logica dell'FPGA, come appunto si vedrà in seguito.
 
 \subsection{FSM e Descrizione Stati }
 Ogni transizione da uno stato ad un altro nella macchina a stati finiti, include una transizione intermedia ad uno stato di "attesa", necessario per permettere ai testbench di interagire con la memoria e di inviare al successivo ciclo di clock i corretti segnali richiesti dal modulo.
@@ -308,14 +309,14 @@ Prima della transizione allo stato WAITING, sarà computato e modificato il segn
 
 Di seguito i diagrammi del cambio di stato (Figura \ref{WAITING_STATE_FSM}) e della FSM principale (Figura \ref{mainFSM}).
 
-\begin{figure}[f]
+\begin{figure}[p]
     \centering
     \caption{Generico cambio di stato con segnale di reset}
     \includegraphics[width=0.8\textwidth]{resources/basicSchema.png}
     \label{WAITING_STATE_FSM}
 \end{figure}
 
-\begin{figure}[f]
+\begin{figure}[p]
     \centering
     \caption{Diagramma generale FMS}
     \includegraphics[width=0.8\textwidth]{resources/mainFSM.png}
@@ -369,7 +370,7 @@ Questi segnali sono utilizzati per la gestione interna dei dati e il controllo d
     \item \texttt{tmp\_k}: Variabile a 16 bit (\texttt{std\_logic\_vector}) utilizzata per concatenare \texttt{k1} e \texttt{k2} prima di assegnare il risultato a \texttt{k}.
     \item \texttt{tmp\_s}: Variabile a 1 bit (\texttt{std\_logic}) utilizzata per una copia temporanea del bit di selezione del filtro \texttt{s} per il controllo immediato del flusso.
     \item \texttt{tmp\_p3}, \texttt{tmp\_p2}, \texttt{tmp\_p1}, \texttt{tmp\_n1}, \texttt{tmp\_n2}, \texttt{tmp\_n3}: Variabili a 32 bit (\texttt{signed}) utilizzate per memorizzare i prodotti intermedi dei coefficienti per i valori di input. Vengono utilizzate con una larghezza maggiore per prevenire overflow durante le moltiplicazioni.
-    \item \texttt{tmp\_sum}: Variabile a 32 bit (\texttt{signed}) che accumula la somma totale dei prodotti parziali dei coefficienti e dei valori di input.
+    \item \texttt{tmp\_sum}: Variabile a 32 bit (\texttt{signed}) che accumula la somma totale dei prodotti parziali tri coefficienti e i valori di input.
     \item \texttt{tmp\_res}: Variabile a 32 bit (\texttt{signed}) che contiene il risultato del filtraggio dopo la normalizzazione, prima dell'applicazione della saturazione e della conversione a 8 bit.
 \end{itemize}
 In particolare vengono utilizzate in questo modo nello stato di \texttt{COMPUTE\_ORDER\_3}
@@ -400,7 +401,7 @@ end if;
 
 La sintesi è il processo che traduce la descrizione hardware (il programma VHDL in questo caso) in un elenco di come i blocchi base dell'FPGA (le 'primitive') devono essere collegati tra loro.
 
-\subsubsection{Analisi del Report di Sintesi di Vivado}
+\subsubsection{Analisi del Report di Sintesi}
 \label{ssec:analisi_sintesi}
 
 Il processo di sintesi è stato eseguito con successo, come indicato dalle linee finali del report:
@@ -433,10 +434,10 @@ INFO: [Synth 8-5545] ROM "o_mem_addr" won't be mapped to RAM because address siz
 \end{lstlisting}
 Questo è ripetuto per diverse istanze di ROM (\texttt{o\_mem\_addr}, \texttt{c\_n2\_3}, \texttt{c\_n1\_3}, \texttt{c\_p1\_3}, \texttt{c\_p2\_3}, \texttt{c\_n3\_5}, \texttt{c\_n2\_5}, \texttt{c\_n1\_5}, \texttt{c\_p1\_5}, \texttt{c\_p2\_5}, \texttt{c\_p3\_5}).
 
-\subsubsection{Report di Utilizzazione delle Risorse}
+\subsubsection{Report di Utilizzo delle Risorse}
 \label{ssec:report_utilizzazione}
 
-Il report di utilizzazione fornisce una panoramica dettagliata delle risorse logiche e fisiche usate dall'FPGA dopo la sintesi.
+Il report utilization fornisce una panoramica dettagliata delle risorse logiche e fisiche usate dall'FPGA dopo la sintesi.
 
 La Tabella \ref{tab:slice_logic_utilization} riassume l'utilizzo delle risorse fondamentali all'interno delle Slice Logiche (quindi i blocchetti logici configurabili all'interno dell'FPGA).
 
@@ -578,18 +579,64 @@ In sintesi, i risultati di utilizzo principali sono riportati dalla tabella \ref
     \end{tabular}
 \end{table}
 
-\subsubsection{Report Implementazione TODO}
+\subsubsection{Report di Analisi Temporale}
 
-\begin{figure}[h!]
+Il report (nella tabella sottostante) fornisce un'indicazione delle prestazioni del design in termini di tempi di setup, hold e larghezza di impulso. I valori riportati sono i seguenti:
+\begin{table}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{reports/image.png}
-    \caption{Report performance}
-    \label{performance_report}
-\end{figure}
+    \caption{Riepilogo dei Risultati dell'Analisi Temporale}
+    \label{tab:timing_analysis_summary}
+    \begin{tabular}{|l|l|l|}
+        \hline
+        \textbf{Categoria} & \textbf{Parametro} & \textbf{Valore} \\
+        \hline
+        \multirow{4}{*}{\textbf{Setup}} & Worst Negative Slack (WNS) & 7.804 ns \\
+        & Total Negative Slack (TNS) & 0.000 ns \\
+        & Number of Failing Endpoints & 0 \\
+        & Total Number of Endpoints & 528 \\
+        \hline
+        \multirow{4}{*}{\textbf{Hold}} & Worst Hold Slack (WHS) & 0.074 ns \\
+        & Total Hold Slack (THS) & 0.000 ns \\
+        & Number of Failing Endpoints & 0 \\
+        & Total Number of Endpoints & 528 \\
+        \hline
+        \multirow{4}{*}{\textbf{Pulse Width}} & Worst Pulse Width Slack (WPWS) & 9.650 ns \\
+        & Total Pulse Width Negative Slack (TPWS) & 0.000 ns \\
+        & Number of Failing Endpoints & 0 \\
+        & Total Number of Endpoints & 303 \\
+        \hline
+    \end{tabular}
+\end{table}
+\noindent Di seguito una descrizione delle voci della tabella:
+\begin{itemize}
+    \item \textbf{Setup Slack (WNS - Worst Negative Slack)}: È il margine di tempo minimo in cui i dati devono essere stabili e validi all'ingresso di un flip-flop prima che arrivi il fronte di clock attivo. 
+    In sostanza indica che i dati sono stabili nel FF almeno $x \text{ ns}$ prima del fronte di salita del clock.
+    \item \textbf{Hold Slack (WHS - Worst Hold Slack)}: È il margine di tempo minimo in cui i dati devono rimanere stabili all'ingresso di un flip-flop dopo l'arrivo del fronte di clock attivo. Anche qui, un valore positivo indica conformità, un valore negativo indica una violazione.
+    \textbf{Pulse Width Slack (WPWS - Worst Pulse Width Slack)}: Questo parametro misura il tempo aggiuntivo che la durata di un impulso (sia esso un segnale di clock o un segnale di controllo come reset o enable) ha a disposizione, rispetto al periodo minimo richiesto, per garantire il corretto funzionamento dei flip-flop e della logica sequenziale.
+    \item \textbf{Total Negative Slack (TNS / THS / TPWS)}: Rappresenta la somma di tutte le violazioni di temporizzazione (slack negativi) all'interno di una specifica categoria (Setup, Hold, Pulse Width).
+    \item \textbf{Number of Failing Endpoints}: Indica il numero di punti (ad esempio, registri o pin di output) nel circuito dove è stata rilevata una violazione di temporizzazione (setup, hold o pulse width).
+    \item \textbf{Total Number of Endpoints}: Indica il numero totale di punti nel design che vengono analizzati per i requisiti di temporizzazione in una specifica categoria.
+\end{itemize}
 
+\noindent I dati presentati nella Tabella \ref{tab:timing_analysis_summary} mostrano una chiara indicazione della salute temporale del design:
 
-
-\subsection{Post-Sintesi ? forse si può anche skippare}
+\begin{itemize}
+\item \textbf{Per la categoria Setup}:
+\begin{itemize}
+\item Il WNS di 7.804 ns indica un ampio margine di setup, ben oltre il minimo richiesto. Questo significa che i dati arrivano con notevole anticipo rispetto al fronte di clock, garantendo un funzionamento sicuro.
+\item Il TNS di 0.000 ns e un Number of Failing Endpoints pari a 0 confermano che non ci sono assolutamente violazioni di setup in nessun percorso del design.
+\end{itemize}
+\item \textbf{Per la categoria Hold}:
+\begin{itemize}
+\item Il WHS di 0.074 ns è un valore positivo, seppur piccolo, che indica che anche i requisiti di hold sono soddisfatti.
+\item Il THS di 0.000 ns idem a prima.
+\end{itemize}
+\item \textbf{Per la categoria Pulse Width}:
+\begin{itemize}
+\item Il WPWS di 9.650 ns indica un ampio margine positivo anche per la larghezza degli impulsi.
+\item Il TPWS di 0.000 ns idem a prima.
+\end{itemize}
+\end{itemize}
 
 \subsection{TestBench}
 
@@ -600,45 +647,127 @@ Per il testbench 2345 è stata effettuata anche la timing.
     \centering
     \caption{Riepilogo dei Risultati delle Simulazioni dei Testbench}
     \label{tab:testbench_results}
-    \begin{tabular}{|l|c|c|c|l|}
+    \begin{tabular}{|l|c|c|}
         \hline
-        \textbf{Nome Testbench} & \textbf{Behavioral} & \textbf{Functional} & \textbf{Timing} & \textbf{Note} \\
+        \textbf{Nome Testbench} & \textbf{Behavioral} & \textbf{Functional} \\
         \hline
-        \multicolumn{5}{|l|}{\textbf{Default}} \\
+        \multicolumn{3}{|l|}{\textbf{Default}} \\
         \hline
-        tb2425.vhd & OK & OK & N.D. & \\
+        tb2425.vhd & OK & OK \\
         \hline
-        \multicolumn{5}{|l|}{\textbf{Generati con filtro singolo}} \\
+        \multicolumn{3}{|l|}{\textbf{Generati con filtro singolo}} \\
         \hline
-        tb\_3\_1500.vhd & OK & OK & FAIL & \\
-        tb\_3\_32000.vhd & OK & OK & FAIL. & \\
-        tb\_5\_24.vhd & OK & OK & FAIL & \\
-        tb\_5\_1500.vhd & OK & OK & FAIL & \\
-        tb\_5\_32000.vhd & OK & OK & FAIL & \\
+        tb\_3\_1500.vhd & OK & OK \\
+        tb\_3\_32000.vhd & OK & OK \\
+        tb\_5\_24.vhd & OK & OK \\
+        tb\_5\_1500.vhd & OK & OK \\
+        tb\_5\_32000.vhd & OK & OK \\
         \hline
-        \multicolumn{5}{|l|}{\textbf{Corner Cases}} \\
+        \multicolumn{3}{|l|}{\textbf{Corner Cases}} \\
         \hline
-        TB\_Intermedi\_Negativi.vhdl & OK & OK & OK & \\
-        TB\_Intermedi\_Positivi.vhdl & OK & OK & OK & \\
-        tb\_ordine\_3\_con\_C1\_e\_C7\_non\_0.vhd & OK & OK & OK & \\
+        TB\_Intermedi\_Negativi.vhdl & OK & OK \\
+        TB\_Intermedi\_Positivi.vhdl & OK & OK \\
+        tb\_ordine\_3\_con\_C1\_e\_C7\_non\_0.vhd & OK & OK \\
         \hline
-        \multicolumn{5}{|l|}{\textbf{Altri}} \\
+        \multicolumn{3}{|l|}{\textbf{Altri}} \\
         \hline
-        tb\_new.vhd & OK & OK & FAIL & \\
-        TestBench\_mark2.vhd & OK & OK & FAIL & \\
+        tb\_new.vhd & OK & OK \\
+        TestBench\_mark2.vhdl & OK & OK \\
         \hline
     \end{tabular}
 \end{table}
 
 I testbench a cui si fa riferimento nella tabella sono contenuti nella directory \texttt{TestBenches} nella cartella root della repo.
 
-\subsubsection{Risultati TB standard}
+\subsubsection{TB standard}
 
-\subsubsection{TB custom per edge cases...}
+Il testbench standard \texttt{tb\_2425.vhd} è stato il primo utilizzato per la verifica del design. Il suo superamento indica la corretta implementazione di diversi aspetti fondamentali del componente, quali:
+\begin{itemize}
+    \item La corretta gestione della memoria (vedi figura \ref{memenwe}).
+    \item Il calcolo del risultato con un filtro di ordine 3.
+    \item La generazione e l'interpretazione dei segnali in accordo con il testbench (come mostrato nella figura \ref{istart} e \ref{odone}).
+\end{itemize}
+
+\begin{figure}[h!]
+    \centering
+    \caption{\texttt{i\_start:$0\to1$} e la modifica degli stati}
+    \includegraphics[width=0.8\textwidth]{resources/Screenshot From 2025-07-11 14-10-00.png}
+    \label{istart}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \caption{\texttt{o\_done:$0\to1$}, l'abbassamento di \texttt{i\_start} e la modifica degli stati}
+    \includegraphics[width=0.8\textwidth]{resources/Screenshot From 2025-07-11 14-16-31.png}
+    \label{odone}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \caption{scrittura di un dato sulla memoria}
+    \includegraphics[width=0.8\textwidth]{resources/Screenshot From 2025-07-11 14-25-43.png}
+    \label{memenwe}
+\end{figure}
+
+
+Questo test ha avuto lo scopo di convalidare le funzionalità essenziali del componente. Il successo di questa verifica funge da base per successivi affinamenti del codice, volti alla gestione dei casi limite (cfr. \ref{edge_cases}) o all'ottimizzazione dell'efficienza in previsione di testbench più onerosi.
+
+\subsubsection{TB custom filtro singolo}
+\label{edge_cases}
+\begin{itemize}
+    \item \textbf{tb\_3\_1500, tb\_3\_32000}:
+    I test effettuati con queste batterie sono stati utili a verificare la capacità del modulo di gestire anche input di dimensioni più grandi (rispettivamente 1500 e 32000 parole W da filtrare) rispetto al \texttt{tb\_2345}, sempre con il filtro di ordine 3.
+
+    \item \textbf{tb\_5\_24, tb\_5\_1500, tb\_5\_32000}:
+    Questi testbenches hanno testato la funzione di filtraggio di ordine 5,sia con piccole sequenze in input (\texttt{tb\_5\_24}), sia con lunghe sequenze (32000 parole).
+
+    \item \textbf{tb\_ordine\_3\_con\_C1\_e\_C7\_non\_0}:
+    Batterie che hanno verificato che il filtro di ordine 3 utilizzasse i corretti valori di input, ignorando correttamente valori non nulli ma inutili forniti in input all'interno della sequenza di coefficienti \texttt{C}.
+
+    I testbench sopra citati con $1500$ e $32000$ elementi sono stati generati automaticamente dal sito \hyperlink{https://www.bia3ia.com/testbench-generator/}{Testbench-Generator} 
+
+\end{itemize} 
+
+\subsubsection{Altri TB}
+Questa sezione descrive ulteriori testbench sviluppati per la verifica del componente, focalizzandosi su scenari specifici e casi limite non coperti dai test di base.
+
+\begin{itemize}
+    \item \textbf{tb\_new.vhdl}
+    Questo testbench è stato progettato per effettuare una verifica completa del componente sotto diversi scenari di input e per testare specifiche funzionalità avanzate. Gli obiettivi principali di questo testbench includono:
+    \begin{itemize}
+        \item La verifica del componente con diverse sequenze di input.
+        \item Il controllo del corretto troncamento del risultato (saturazione).
+        \item La validazione del funzionamento del componente anche dopo aver ricevuto un segnale di reset durante un'elaborazione in corso.
+        \item Il testing standard sia del filtro di terzo ordine che di quello di quinto ordine.
+        \item L'assicurazione che il filtro di terzo ordine operi correttamente anche quando i coefficienti iniziali e finali non sono impostati a zero.
+        \item La conferma che il componente possa avviare una nuova esecuzione senza la necessità di un segnale di reset aggiuntivo.
+    \end{itemize}
+    Il testbench \texttt{tb\_new.vhdl} realizza questi obiettivi utilizzando e confrontando i dati di esempio (definiti internamente come `scenario\_input/output` e `scenario\_input2/output2`), che vengono testati in successione. Il test include anche la manipolazione del segnale `tb\_rst` a metà di uno scenario per simulare un reset durante l'operazione.
+
+
+    \item \textbf{TestBench\_mark2.vhdl}
+    Questo testbench è stato progettato per una verifica approfondita del componente, coprendo un'ampia gamma di scenari operativi e condizioni critiche. Si distingue per la sua complessità e il numero di scenari integrati, che includono:
+    \begin{itemize}
+        \item Verifica del componente sotto diversi scenari di input (6 per la precisione) complessi e di grandi dimensioni (es. \texttt{SCENARIO\_LENGTH} fino a 12000 campioni), simulando lunghe elaborazioni.
+        \item Solito test di saturazione del risultato.
+        \item Prova della funzionalità del componente dopo aver ricevuto segnali di reset multipli (\texttt{tb\_rst}) in momenti diversi durante un'elaborazione in corso. Questo verifica la robustezza e la capacità di ripristino del design.
+        \item Testing sia del filtro di terzo ordine che di quello di quinto ordine, applicando diverse configurazioni e set di coefficienti.
+        \item Assicurazione del funzionamento corretto del filtro di terzo ordine anche quando i coefficienti iniziali e finali non sono impostati a zero.
+        \item Verifica della capacità del componente di avviare nuovamente l'esecuzione senza la necessità di un segnale di reset aggiuntivo tra le diverse esecuzioni.
+        \item Inclusione di scenari specifici per condizioni limite (`Scenario 5` con tutti 127 e `Scenario 6` con tutti -128 tra i dati di input) per testare il comportamento del sistema ai massimi e minimi valori rappresentabili.
+    \end{itemize}
+    Il testbench esegue 6 scenari di test in successione, ognuno con proprie configurazioni (\texttt{scenario\_config}), dati di input (\texttt{scenario\_inputX}) e output attesi (\texttt{scenario\_outputX}), pre-caricando i dati nella RAM simulata e verificando i risultati. La logica di controllo gestisce lo scambio della memoria tra il testbench e il componente, e simula reset in punti strategici per una verifica esaustiva della resilienza.
+\end{itemize}
 
 \section{Conclusioni}
 
 
-link alla repo...
+Il progetto presentato in questa relazione ha raggiunto con successo l'obiettivo di sviluppare un componente VHDL per il filtraggio differenziale di sequenze di dati, rispettando pienamente le specifiche fornite. Il modulo implementato gestisce correttamente l'interfacciamento con la memoria esterna, l'interpretazione dei metadati e l'esecuzione di filtri di ordine 3 e 5, producendo i risultati attesi.
+
+La validità del componente è stata confermata attraverso un'approfondita campagna di verifica. Oltre al superamento del testbench standard, sono stati sviluppati e superati numerosi test customizzati, mirati a esplorare un'ampia gamma di scenari operativi. Tale approccio metodico alla verifica ha permesso di consolidare la fiducia nella correttezza e resilienza del design.
+
+L'analisi dei report di sintesi e di temporizzazione ha confermato la fattibilità del progetto sull'hardware target. L'utilizzo delle risorse della FPGA \texttt{xc7k70tfbg676-1} è risultato contenuto, e l'assenza di violazioni di timing assicura il funzionamento affidabile del componente alla frequenza di clock richiesta.
+
+In conclusione, lo sviluppo di questo progetto ha rappresentato un'importante opportunità formativa, consolidando le conoscenze teoriche di progettazione digitale e offrendo un'esperienza pratica completa che spazia dalla scrittura del codice VHDL alla sua verifica funzionale, sintesi e analisi delle performance.
 
 \end{document}
