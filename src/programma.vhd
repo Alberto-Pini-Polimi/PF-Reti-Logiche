@@ -71,9 +71,7 @@ begin
 
         variable tmp_k : std_logic_vector(15 downto 0) := (others => '0');
         variable tmp_s : std_logic := '0';
-        --variable tmp_coeff_counter : integer := 0;
         
-        --MODIFIED TO SIGNED 
         variable tmp_p3 : signed(31 downto 0) := to_signed(0, 32);
         variable tmp_p2 : signed(31 downto 0) := to_signed(0, 32);
         variable tmp_p1 : signed(31 downto 0) := to_signed(0, 32);
@@ -92,7 +90,7 @@ begin
             next_state <= START;
             state <= WAITING;
             o_done <= '0';
-            o_mem_en <= '1'; -- next clock time, we want to read data from memory, don''t we need to set en to 1 rn?
+            o_mem_en <= '1'; -- next clock time, we want to read data from memory
             
             o_mem_we <= '0';
             o_mem_addr <= (others => '0');
@@ -262,7 +260,7 @@ begin
                             end case;
                         end if;
                                     
-                        coeff_counter <= coeff_counter + 1; -- se non va usare tmp_coeff_counter come variabile momentanea
+                        coeff_counter <= coeff_counter + 1; 
 
 
                     ----------------------- FASE DI INIZIALIZZAZIONE DEI PRIMI VALORI -----------------------------------
@@ -338,7 +336,7 @@ begin
 
                         ----set resize value to 16 instead of 32 bc [Synth 8-690] width mismatch in assignment; target has 32 bits, source has 64 bits 
          
-                        tmp_n2 := resize(c_n2_3, 16) * resize(prev2, 16); -- se non si può o per plagio defence, we can use std logic vector 31 down to 8 = 0 e others = x
+                        tmp_n2 := resize(c_n2_3, 16) * resize(prev2, 16);
                         tmp_n1 := resize(c_n1_3, 16) * resize(prev1, 16);
                         tmp_p1 := resize(c_p1_3, 16) * resize(next1, 16);
                         tmp_p2 := resize(c_p2_3, 16) * resize(next2, 16);
@@ -415,7 +413,7 @@ begin
                         o_done <= '0';
 
                         tmp_n3 := resize(c_n3_5, 16) * resize(prev3, 16);
-                        tmp_n2 := resize(c_n2_5, 16) * resize(prev2, 16); -- se non si può o per plagio defence, we can use std logic vector 31 down to 8 = 0 e others = x
+                        tmp_n2 := resize(c_n2_5, 16) * resize(prev2, 16);
                         tmp_n1 := resize(c_n1_5, 16) * resize(prev1, 16);
                         tmp_p1 := resize(c_p1_5, 16) * resize(next1, 16);
                         tmp_p2 := resize(c_p2_5, 16) * resize(next2, 16);
@@ -444,7 +442,7 @@ begin
 
                         if data_counter = k - 1 then 
                             o_done <= '0';
-                            next_state <= DONE; -- ci penso su dato che dopo dovrà gestire anche i prossimi calcoli
+                            next_state <= DONE; 
                         else 
                             o_done <= '0';
                             next_state <= SHIFT_ORDER_5;
@@ -513,8 +511,5 @@ begin
             end if;
         end if;
     end process;
-
-    -- Uscita indirizzo memoria
-    --o_mem_addr <= std_logic_vector(mem_addr);
 
 end architecture behavioral;
