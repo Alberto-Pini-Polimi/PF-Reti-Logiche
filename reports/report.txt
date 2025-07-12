@@ -1,4 +1,25 @@
 
+
+Lo studente deve allegare al progetto anche la documentazione. Quest'ultima deve includere: 
+1) specifiche di progetto 
+2) scelte progettuali 
+3) risultati dei test fatti e le ragioni di tali test (motivare le scelte) 
+4) risultati della sintesi. Nel caso di un componente descritto e simulabile correttamente in pre-sintesi questo deve essere chiaramente segnalato anche nella relazione. La qualità della relazione concorre alla definizione del voto complessivo.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Esporta in Fogli
 Tabella 1: Report di Utilizzo delle Risorse FPGA
 
