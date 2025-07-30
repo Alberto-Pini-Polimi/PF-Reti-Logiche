@@ -56,7 +56,7 @@
 
 % --- Informazioni del documento ---
 \title{\Huge Prova Finale di Reti Logiche \\ \Large Anno Accademico 2024 - 2025}
-\author{Alberto Pini e Davide Redaelli\\10823873 - ?\\212524 - 215263}
+\author{Alberto Pini e Davide Redaelli\\10823873 - 10899959\\212524 - 215263}
 \date{\today} % O puoi specificare una data fissa, es: \date{5 Luglio 2025}
 
 \begin{document}
@@ -273,17 +273,17 @@ La comunicazione con la memoria esterna, gestita a livello del Top Module, avvie
     \label{diagrammaDiEsempio}
 \end{figure}
 
-Per illustrare il processo di filtraggio differenziale, consideriamo l'applicazione di un filtro di ordine 3 a una sequenza generica di dati. Si assume che il modulo abbia già letto dalla memoria i parametri iniziali, ovvero la lunghezza della sequenza $K$, il bit di selezione del filtro $S$ (che indica l'uso di un filtro di ordine 3), e i coefficienti del filtro. La sequenza dei coefficienti sarà composta da $C_{-3}, C_{-2}, C_{-1}, C_1, C_2 C_3$ (letti in base all'ordine del filtro) e il valore di normalizzazione $n$. L'indirizzo di inizio dei dati in input è $\text{ADD}_W$, e l'indirizzo dove verranno scritti i risultati è $\text{ADD}_R$.
+Per illustrare il processo di filtraggio differenziale, consideriamo l'applicazione di un filtro di ordine 3 a una sequenza generica di dati. Si assume che il modulo abbia già letto dalla memoria i parametri iniziali, ovvero la lunghezza della sequenza $K$, il bit di selezione del filtro $S$ (che indica l'uso di un filtro di ordine 3), e i coefficienti del filtro. La sequenza dei coefficienti sarà composta da $C_{-3}, C_{-2}, C_{-1}, C_0, C_1, C_2 C_3$ (letti in base all'ordine del filtro) e il valore di normalizzazione $n$. L'indirizzo di inizio dei dati in input è $\text{ADD}_W$, e l'indirizzo dove verranno scritti i risultati è $\text{ADD}_R$.
 
 Il processo iterativo per il calcolo di ciascun valore filtrato $R_i$ è il seguente:
 \begin{enumerate}
-    \item \textbf{Lettura dei dati di input:} Per calcolare il valore $R_i$, il modulo deve accedere ai valori $W$ circostanti la posizione $i$ nella memoria. Nello specifico, per un filtro di ordine 3, saranno necessari i valori $W_{i-2}, W_{i-1}, W_{i+1}, W_{i+2}$ ($W_i$ non è necessario dato che si assume che $C_0=0$). Questi vengono letti dagli indirizzi di memoria appropriati, che sono $ADD_W + (i-2)$, $ADD_W + (i-1)$, $ADD_W + (i+1)$, $ADD_W + (i+2)$. Si noti che per i valori all'inizio o alla fine della sequenza $W$ (cioè quando gli indici $i-2$, $i-1$, $i+1$, $i+2$ eccedono i limiti della sequenza valida), i valori corrispondenti a $W$ non esistenti sono considerati pari a $0$.
+    \item \textbf{Lettura dei dati di input:} Per calcolare il valore $R_i$, il modulo deve accedere ai valori $W$ circostanti la posizione $i$ nella memoria. Nello specifico, per un filtro di ordine 3, saranno necessari i valori $W_{i-2}, W_{i-1}, W_i, W_{i+1}, W_{i+2}$. Questi vengono letti dagli indirizzi di memoria appropriati, che sono $ADD_W + (i-2)$, $ADD_W + (i-1)$, $ADD_W + i$ $ADD_W + (i+1)$, $ADD_W + (i+2)$. Si noti che per i valori all'inizio o alla fine della sequenza $W$ (cioè quando gli indici $i-2$, $i-1$, $i$, $i+1$, $i+2$ eccedono i limiti della sequenza valida), i valori corrispondenti a $W$ non esistenti sono considerati pari a $0$.
     
     \item \textbf{Calcolo della somma pesata:} Viene calcolata la somma pesata dei valori di input con i rispettivi coefficienti del filtro. La formula generale per un filtro differenziale è 
     $$R_i^\text{raw} = \sum_{j=-l}^{+l} C_j \times W_{i+j}\ \ \, \text{dove}\ l= \left\{ \begin{array}{cl} 2 \text{ per il filtro di ordine 3} \\ 3 \text{ per il filtro di ordine 5} \end{array} \right.$$
     Pertanto, il valore intermedio (di ordine $3$) sarà:
-    $$R_i^\text{raw} = (C_{-2} \times W_{i-2}) + (C_{-1} \times W_{i-1}) + (C_1 \times W_{i+1}) + (C_2 \times W_{i+2})$$
-    Si assume che i coefficienti $C_j$ siano quelli specificati per il filtro di ordine 3, come ad esempio i coefficienti non nulli $C_{-2}, C_{-1}, C_1, C_2$ dalla specifica $c=[-1, 8, -8, 1]$. Se invece stessimo filtrando in ordine $5$ i $C_j$ sarebbero stati $6$ in totale ($C_{-3}, C_{-2}, C_{-1}, C_1, C_2 C_3$).
+    $$R_i^\text{raw} = (C_{-2} \times W_{i-2}) + (C_{-1} \times W_{i-1}) + (C_{0} \times W_{i}) + (C_1 \times W_{i+1}) + (C_2 \times W_{i+2})$$
+    Si assume che i coefficienti $C_j$ siano quelli specificati per il filtro di ordine 3, come ad esempio i coefficienti $C_{-2}, C_{-1}, C_0, C_1, C_2$ dalla specifica $c=[-1, 8, 0, -8, 1]$. Se invece stessimo filtrando in ordine $5$ i $C_j$ sarebbero stati $7$ in totale ($C_{-3}, C_{-2}, C_{-1}, C_0, C_1, C_2 C_3$).
     
     \item \textbf{Normalizzazione:} Il valore $R_i^\text{raw}$ ottenuto deve essere normalizzato dividendolo per il coefficiente $n$. Questa divisione è approssimata come una somma di shift a destra (divisioni per potenze di 2). Per il filtro di ordine 3, $n=12$, approssimato come $1/16+1/64+1/256+1/1024$. Per minimizzare l'errore di troncamento per i numeri negativi, viene aggiunto $1$ al risultato di un singolo shift se il valore shiftato è negativo.
     \item \textbf{Saturazione:} Dopo la normalizzazione, il valore $R_i$ risultante viene confrontato con l'intervallo valido di $[-128, +127]$. Se $R_i$ è inferiore a $-128$, viene saturato a $-128$. Se $R_i$ è superiore a $+127$, viene saturato a $+127$.
@@ -341,8 +341,8 @@ Questi segnali sono utilizzati per la gestione interna dei dati e il controllo d
 
     \item \textbf{Segnali per memorizzare i coefficienti}: 
     \begin{itemize}
-        \item \texttt{c\_n2\_3}, \texttt{c\_n1\_3}, \texttt{c\_p1\_3}, \texttt{c\_p2\_3}: Segnali a 8 bit (\texttt{signed}) che memorizzano i coefficienti specifici per il filtro di ordine 3. Corrispondono ai coefficienti $C_{-2}, C_{-1}, C_{+1}, C_{+2}$ dalla specifica, assumendo $C_0$ sia un valore centrale e altri coefficienti siano impliciti o zero.
-        \item \texttt{c\_n3\_5}, \texttt{c\_n2\_5}, \texttt{c\_n1\_5}, \texttt{c\_p1\_5}, \texttt{c\_p2\_5}, \texttt{c\_p3\_5}: Segnali a 8 bit (\texttt{signed}) idem a prima ma per il filtro di ordine 5.
+        \item \texttt{c\_n2\_3}, \texttt{c\_n1\_3}, \texttt{c\_central\_3}, \texttt{c\_p1\_3}, \texttt{c\_p2\_3}: Segnali a 8 bit (\texttt{signed}) che memorizzano i coefficienti specifici per il filtro di ordine 3. Corrispondono ai coefficienti $C_{-2}, C_{-1}, C_0, C_{+1}, C_{+2}$ dalla specifica, assumendo $C_0$ sia un valore centrale e altri coefficienti siano impliciti o zero.
+        \item \texttt{c\_n3\_5}, \texttt{c\_n2\_5}, \texttt{c\_n1\_5}, \texttt{c\_central\_5}, \texttt{c\_p1\_5}, \texttt{c\_p2\_5}, \texttt{c\_p3\_5}: Segnali a 8 bit (\texttt{signed}) idem a prima ma per il filtro di ordine 5.
     \end{itemize}
 
     \item \textbf{Segnali della "sliding window"}:
@@ -369,7 +369,7 @@ Questi segnali sono utilizzati per la gestione interna dei dati e il controllo d
 \begin{itemize}
     \item \texttt{tmp\_k}: Variabile a 16 bit (\texttt{std\_logic\_vector}) utilizzata per concatenare \texttt{k1} e \texttt{k2} prima di assegnare il risultato a \texttt{k}.
     \item \texttt{tmp\_s}: Variabile a 1 bit (\texttt{std\_logic}) utilizzata per una copia temporanea del bit di selezione del filtro \texttt{s} per il controllo immediato del flusso.
-    \item \texttt{tmp\_p3}, \texttt{tmp\_p2}, \texttt{tmp\_p1}, \texttt{tmp\_n1}, \texttt{tmp\_n2}, \texttt{tmp\_n3}: Variabili a 32 bit (\texttt{signed}) utilizzate per memorizzare i prodotti intermedi dei coefficienti per i valori di input. Vengono utilizzate con una larghezza maggiore per prevenire overflow durante le moltiplicazioni.
+    \item \texttt{tmp\_p3}, \texttt{tmp\_p2}, \texttt{tmp\_p1}, \texttt{tmp\_central}, \texttt{tmp\_n1}, \texttt{tmp\_n2}, \texttt{tmp\_n3}: Variabili a 32 bit (\texttt{signed}) utilizzate per memorizzare i prodotti intermedi dei coefficienti per i valori di input. Vengono utilizzate con una larghezza maggiore per prevenire overflow durante le moltiplicazioni.
     \item \texttt{tmp\_sum}: Variabile a 32 bit (\texttt{signed}) che accumula la somma totale dei prodotti parziali tri coefficienti e i valori di input.
     \item \texttt{tmp\_res}: Variabile a 32 bit (\texttt{signed}) che contiene il risultato del filtraggio dopo la normalizzazione, prima dell'applicazione della saturazione e della conversione a 8 bit.
 \end{itemize}
@@ -380,10 +380,11 @@ In particolare vengono utilizzate in questo modo nello stato di \texttt{COMPUTE\
     \begin{lstlisting}[caption=Calcolo mediante variabili temporanee]
 tmp_n2 := resize(c_n2_3, 16) * resize(prev2, 16);
 tmp_n1 := resize(c_n1_3, 16) * resize(prev1, 16);
+tmp_central := resize(c_central_3, 16) * resize(current_W, 16);
 tmp_p1 := resize(c_p1_3, 16) * resize(next1, 16);
 tmp_p2 := resize(c_p2_3, 16) * resize(next2, 16);
 
-tmp_sum := tmp_n2 + tmp_n1 + tmp_p1 + tmp_p2;
+tmp_sum := tmp_n2 + tmp_n1 + tmp_central + tmp_p1 + tmp_p2;
 tmp_res := shift_right (tmp_sum, 4) + shift_right (tmp_sum, 6) 
          + shift_right (tmp_sum, 8) + shift_right (tmp_sum, 10);
 if tmp_sum < to_signed(0, 32) then
